@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Accesul nu a fost permis.",
   "optionsResetMsg": "Locație resetată.",
   "optionsError": "Eroare: {message}",
-  "folderNone": "niciun folder ales"
+  "folderNone": "niciun folder ales",
+  "homeHint": "Pentru a începe relistingul, mergi la",
+  "homeButton": "pagina de membru"
 }

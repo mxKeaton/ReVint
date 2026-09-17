@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Dostęp nie został przyznany.",
   "optionsResetMsg": "Lokalizacja zresetowana.",
   "optionsError": "Błąd: {message}",
-  "folderNone": "nie wybrano folderu"
+  "folderNone": "nie wybrano folderu",
+  "homeHint": "Aby rozpocząć relisting, przejdź do",
+  "homeButton": "strony członka"
 }

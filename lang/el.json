@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Η πρόσβαση δεν εγκρίθηκε.",
   "optionsResetMsg": "Η τοποθεσία επαναφέρθηκε.",
   "optionsError": "Σφάλμα: {message}",
-  "folderNone": "δεν έχει επιλεγεί φάκελος"
+  "folderNone": "δεν έχει επιλεγεί φάκελος",
+  "homeHint": "Για να ξεκινήσετε το relisting, μεταβείτε στη",
+  "homeButton": "σελίδα μέλους"
 }

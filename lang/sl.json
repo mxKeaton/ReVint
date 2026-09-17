@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Dostop ni bil dovoljen.",
   "optionsResetMsg": "Lokacija ponastavljena.",
   "optionsError": "Napaka: {message}",
-  "folderNone": "mapa ni izbrana"
+  "folderNone": "mapa ni izbrana",
+  "homeHint": "Za začetek relistinga pojdite na",
+  "homeButton": "stran člana"
 }

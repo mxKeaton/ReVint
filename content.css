@@ -100,6 +100,26 @@
 
 .revint-inline { margin-top: 12px; }
 
+.revint-panel--home {
+  max-width: 300px;
+  width: auto;
+}
+.revint-home-hint {
+  color: #333;
+  font: 13px/18px Arial, sans-serif;
+  padding: 0 4px;
+}
+.revint-home-button {
+  background: none;
+  border: none;
+  color: #007782;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+.revint-home-button:hover { color: #005b63; }
+
 .revint-folder-row {
   align-items: center;
   display: flex;

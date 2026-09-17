@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "O acesso não foi concedido.",
   "optionsResetMsg": "Localização reposta.",
   "optionsError": "Erro: {message}",
-  "folderNone": "nenhuma pasta escolhida"
+  "folderNone": "nenhuma pasta escolhida",
+  "homeHint": "Para começar a relistar, vai para a",
+  "homeButton": "página de membro"
 }

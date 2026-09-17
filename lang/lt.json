@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Prieiga nebuvo suteikta.",
   "optionsResetMsg": "Saugojimo vieta atkurta.",
   "optionsError": "Klaida: {message}",
-  "folderNone": "nepasirinktas aplankas"
+  "folderNone": "nepasirinktas aplankas",
+  "homeHint": "Norėdami pradėti relistingą, eikite į",
+  "homeButton": "nario puslapį"
 }

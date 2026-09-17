@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Zugriff wurde nicht erlaubt.",
   "optionsResetMsg": "Speicherort zurückgesetzt.",
   "optionsError": "Fehler: {message}",
-  "folderNone": "kein Ordner gewählt"
+  "folderNone": "kein Ordner gewählt",
+  "homeHint": "Um mit dem Relisten zu beginnen, wechsle zur",
+  "homeButton": "Mitgliederseite"
 }

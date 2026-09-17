@@ -19,6 +19,8 @@ Die Sprache der Oberfläche wird automatisch aus der besuchten Domain erkannt (z
 
 ## Verwendung
 
+Auf der Vinted-Startseite (`/`) zeigt ReVint einen kurzen Hinweis samt Button zur Mitgliederseite („… wechsle zur **Mitgliederseite**“).
+
 Unter jedem sichtbaren **Pushen**-Button erscheint **Als Relisting speichern**. Die Erweiterung liest die Artikelseite, lädt die dort sichtbaren Fotos und legt alles lokal in der Erweiterung ab (kein Speicher-Dialog, kein Ordner, kein Server).
 
 Rechts oben zeigt ReVint auf beiden Seiten ein gemeinsames Panel mit den gespeicherten Relistings:

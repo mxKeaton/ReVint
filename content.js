@@ -485,6 +485,12 @@
     return `${location.origin}/items/new`;
   }
 
+  function findMemberUrl() {
+    const link = [...document.querySelectorAll('a[href*="/member/"]')]
+      .find((element) => /\/member\/\d+/.test(element.getAttribute("href") || ""));
+    return link ? new URL(link.href, location.href).href : `${location.origin}/member`;
+  }
+
   async function enqueueAutoImport(name) {
     const stored = await chrome.storage.local.get("revintPendingQueue");
     const queue = stored.revintPendingQueue || [];
@@ -510,6 +516,16 @@
     if (existing && existing.dataset.mode === mode) return;
     existing?.remove();
     if (!document.body) return;
+
+    if (mode === "home") {
+      const home = document.createElement("div");
+      home.className = "revint-panel revint-panel--home";
+      home.dataset.mode = mode;
+      home.innerHTML = `<div class="revint-panel-title">ReVint</div><div class="revint-home-hint">${t("homeHint")} <button type="button" class="revint-home-button">${t("homeButton")}</button></div>`;
+      home.querySelector(".revint-home-button").addEventListener("click", () => location.assign(findMemberUrl()));
+      document.body.appendChild(home);
+      return;
+    }
 
     const panel = document.createElement("div");
     panel.className = "revint-panel revint-collapsed";
@@ -1418,6 +1434,8 @@
     } else if (location.pathname.startsWith("/member")) {
       addPanel("member");
       addSaveButtons();
+    } else if (location.pathname === "/") {
+      addPanel("home");
     }
   }
 

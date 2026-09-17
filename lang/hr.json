@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Pristup nije dopušten.",
   "optionsResetMsg": "Lokacija poništena.",
   "optionsError": "Greška: {message}",
-  "folderNone": "mapa nije odabrana"
+  "folderNone": "mapa nije odabrana",
+  "homeHint": "Za početak relistinga idite na",
+  "homeButton": "stranicu člana"
 }

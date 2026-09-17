@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Access was not granted.",
   "optionsResetMsg": "Save location reset.",
   "optionsError": "Error: {message}",
-  "folderNone": "no folder chosen"
+  "folderNone": "no folder chosen",
+  "homeHint": "To start relisting switch to the",
+  "homeButton": "member page"
 }

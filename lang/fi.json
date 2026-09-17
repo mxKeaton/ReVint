@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Käyttöoikeutta ei myönnetty.",
   "optionsResetMsg": "Tallennussijainti palautettu.",
   "optionsError": "Virhe: {message}",
-  "folderNone": "kansiota ei valittu"
+  "folderNone": "kansiota ei valittu",
+  "homeHint": "Aloita relistaus siirtymällä",
+  "homeButton": "jäsen-sivulle"
 }

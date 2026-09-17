@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Åtkomst beviljades inte.",
   "optionsResetMsg": "Sparplats återställd.",
   "optionsError": "Fel: {message}",
-  "folderNone": "ingen mapp vald"
+  "folderNone": "ingen mapp vald",
+  "homeHint": "För att börja relista, gå till",
+  "homeButton": "medlemssidan"
 }

@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Accesso non consentito.",
   "optionsResetMsg": "Posizione reimpostata.",
   "optionsError": "Errore: {message}",
-  "folderNone": "nessuna cartella scelta"
+  "folderNone": "nessuna cartella scelta",
+  "homeHint": "Per iniziare a rilistare, vai alla",
+  "homeButton": "pagina membro"
 }

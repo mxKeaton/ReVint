@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Juurdepääsu ei lubatud.",
   "optionsResetMsg": "Salvestuskoht lähtestatud.",
   "optionsError": "Viga: {message}",
-  "folderNone": "kausta pole valitud"
+  "folderNone": "kausta pole valitud",
+  "homeHint": "Relistimise alustamiseks minge",
+  "homeButton": "liikme lehele"
 }

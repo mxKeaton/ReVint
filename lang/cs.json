@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Přístup nebyl povolen.",
   "optionsResetMsg": "Umístění obnoveno.",
   "optionsError": "Chyba: {message}",
-  "folderNone": "není vybrána složka"
+  "folderNone": "není vybrána složka",
+  "homeHint": "Chcete-li začít relisting, přejděte na",
+  "homeButton": "stránku člena"
 }

@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Достъпът не беше разрешен.",
   "optionsResetMsg": "Мястото за запазване е нулирано.",
   "optionsError": "Грешка: {message}",
-  "folderNone": "няма избрана папка"
+  "folderNone": "няма избрана папка",
+  "homeHint": "За да започнете relisting, отидете на",
+  "homeButton": "страницата на член"
 }

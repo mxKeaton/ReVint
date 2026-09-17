@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Adgang blev ikke tilladt.",
   "optionsResetMsg": "Gemmeplacering nulstillet.",
   "optionsError": "Fejl: {message}",
-  "folderNone": "ingen mappe valgt"
+  "folderNone": "ingen mappe valgt",
+  "homeHint": "For at begynde at reliste, gå til",
+  "homeButton": "medlemssiden"
 }

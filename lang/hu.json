@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "A hozzáférés nem lett engedélyezve.",
   "optionsResetMsg": "Mentési hely visszaállítva.",
   "optionsError": "Hiba: {message}",
-  "folderNone": "nincs mappa kiválasztva"
+  "folderNone": "nincs mappa kiválasztva",
+  "homeHint": "Az újralistázás megkezdéséhez menj a",
+  "homeButton": "tagoldalra"
 }

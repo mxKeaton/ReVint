@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Piekļuve netika atļauta.",
   "optionsResetMsg": "Saglabāšanas vieta atiestatīta.",
   "optionsError": "Kļūda: {message}",
-  "folderNone": "mape nav izvēlēta"
+  "folderNone": "mape nav izvēlēta",
+  "homeHint": "Lai sāktu relistingu, dodieties uz",
+  "homeButton": "dalībnieka lapu"
 }

@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "No se concedió el acceso.",
   "optionsResetMsg": "Ubicación restablecida.",
   "optionsError": "Error: {message}",
-  "folderNone": "ninguna carpeta elegida"
+  "folderNone": "ninguna carpeta elegida",
+  "homeHint": "Para empezar a relistar, ve a la",
+  "homeButton": "página de miembro"
 }

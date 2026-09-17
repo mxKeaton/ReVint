@@ -38,5 +38,7 @@
   "optionsDeniedMsg": "Toegang is niet toegestaan.",
   "optionsResetMsg": "Locatie gereset.",
   "optionsError": "Fout: {message}",
-  "folderNone": "geen map gekozen"
+  "folderNone": "geen map gekozen",
+  "homeHint": "Om te beginnen met relisten, ga naar de",
+  "homeButton": "ledenpagina"
 }
