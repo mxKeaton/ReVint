@@ -3,7 +3,7 @@
   "name": "ReVint",
   "version": "1.0",
   "description": "Sichert eigene Vinted-Relistings lokal in der Erweiterung und füllt das Formular zum erneuten Einstellen aus.",
-  "homepage_url": "https://github.com/your-user/ReVint",
+  "homepage_url": "https://github.com/mxKeaton/ReVint",
   "minimum_chrome_version": "102",
   "permissions": [
     "storage"

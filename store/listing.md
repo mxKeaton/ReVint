@@ -24,10 +24,10 @@ Productivity (suggested)
 English (add more locales in the store listing)
 
 ## Support / homepage
-https://github.com/your-user/ReVint   (TODO: replace with your repo)
+https://github.com/mxKeaton/ReVint
 
 ## Privacy policy URL
-https://your-user.github.io/ReVint/privacy-policy   (TODO: publish store/privacy-policy.md via GitHub Pages)
+https://mxkeaton.github.io/ReVint/privacy-policy.html
 
 ## Assets
 - Store icon:          store/icon-128.png      (128x128)

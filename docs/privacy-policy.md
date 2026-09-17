@@ -1,6 +1,6 @@
 # ReVint — Privacy Policy
 
-_Last updated: TODO (date) · Publisher: TODO (your name or GitHub handle) · Contact: TODO (GitHub issues URL)_
+_Last updated: 2026-09-17 · Publisher: mxKeaton · Contact: https://github.com/mxKeaton/ReVint/issues_
 
 > This page is written to be published as-is on GitHub Pages and linked from the Chrome Web Store listing.
 
@@ -49,4 +49,4 @@ If this policy changes, the updated version will be published at this URL with a
 
 ## Contact
 
-Questions about this policy: TODO (GitHub repository / issues URL, e.g. `https://github.com/<user>/ReVint/issues`).
+Questions about this policy: https://github.com/mxKeaton/ReVint/issues.

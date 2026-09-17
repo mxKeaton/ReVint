@@ -10,6 +10,6 @@ These files are **placeholders** to be replaced before publishing.
 | `promo-tile-440x280.png` | Optional small promo tile | real 440×280 |
 | `listing.md` | Name, summary, description, category | final copy |
 | `reviewer-notes.md` | "Notes for reviewers" | adjust/confirm |
-| `privacy-policy.md` | Privacy policy (draft created) | fill in the TODOs (date, name, GitHub URLs) and publish via GitHub Pages |
+| `../docs/privacy-policy.md` | Privacy policy | published via GitHub Pages at https://mxkeaton.github.io/ReVint/privacy-policy.html |
 
 The extension icons in `../icons/` (`16/32/48/128.png`) are placeholders too.

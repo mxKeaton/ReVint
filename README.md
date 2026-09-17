@@ -2,6 +2,8 @@
 
 Eine Chromium-Erweiterung zum lokalen Sichern und erneuten Ausfüllen eigener Angebote auf Vinted.
 
+Repository: <https://github.com/mxKeaton/ReVint>
+
 ## Installation
 
 1. Chromium/Chrome öffnen und `chrome://extensions` aufrufen.
