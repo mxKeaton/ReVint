@@ -1,0 +1,159 @@
+{
+  "manifest_version": 3,
+  "name": "ReVint",
+  "version": "1.0",
+  "description": "Sichert eigene Vinted-Relistings lokal in der Erweiterung und füllt das Formular zum erneuten Einstellen aus.",
+  "homepage_url": "https://github.com/your-user/ReVint",
+  "minimum_chrome_version": "102",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.vinted.com/*",
+    "*://*.vinted.co.uk/*",
+    "*://*.vinted.ie/*",
+    "*://*.vinted.de/*",
+    "*://*.vinted.at/*",
+    "*://*.vinted.be/*",
+    "*://*.vinted.fr/*",
+    "*://*.vinted.lu/*",
+    "*://*.vinted.nl/*",
+    "*://*.vinted.es/*",
+    "*://*.vinted.it/*",
+    "*://*.vinted.pl/*",
+    "*://*.vinted.lt/*",
+    "*://*.vinted.lv/*",
+    "*://*.vinted.ee/*",
+    "*://*.vinted.cz/*",
+    "*://*.vinted.sk/*",
+    "*://*.vinted.hu/*",
+    "*://*.vinted.ro/*",
+    "*://*.vinted.se/*",
+    "*://*.vinted.dk/*",
+    "*://*.vinted.fi/*",
+    "*://*.vinted.pt/*",
+    "*://*.vinted.gr/*",
+    "*://*.vinted.hr/*",
+    "*://*.vinted.bg/*",
+    "*://*.vinted.si/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "ReVint",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.vinted.com/member*",
+        "*://*.vinted.com/items/new*",
+        "*://*.vinted.co.uk/member*",
+        "*://*.vinted.co.uk/items/new*",
+        "*://*.vinted.ie/member*",
+        "*://*.vinted.ie/items/new*",
+        "*://*.vinted.de/member*",
+        "*://*.vinted.de/items/new*",
+        "*://*.vinted.at/member*",
+        "*://*.vinted.at/items/new*",
+        "*://*.vinted.be/member*",
+        "*://*.vinted.be/items/new*",
+        "*://*.vinted.fr/member*",
+        "*://*.vinted.fr/items/new*",
+        "*://*.vinted.lu/member*",
+        "*://*.vinted.lu/items/new*",
+        "*://*.vinted.nl/member*",
+        "*://*.vinted.nl/items/new*",
+        "*://*.vinted.es/member*",
+        "*://*.vinted.es/items/new*",
+        "*://*.vinted.it/member*",
+        "*://*.vinted.it/items/new*",
+        "*://*.vinted.pl/member*",
+        "*://*.vinted.pl/items/new*",
+        "*://*.vinted.lt/member*",
+        "*://*.vinted.lt/items/new*",
+        "*://*.vinted.lv/member*",
+        "*://*.vinted.lv/items/new*",
+        "*://*.vinted.ee/member*",
+        "*://*.vinted.ee/items/new*",
+        "*://*.vinted.cz/member*",
+        "*://*.vinted.cz/items/new*",
+        "*://*.vinted.sk/member*",
+        "*://*.vinted.sk/items/new*",
+        "*://*.vinted.hu/member*",
+        "*://*.vinted.hu/items/new*",
+        "*://*.vinted.ro/member*",
+        "*://*.vinted.ro/items/new*",
+        "*://*.vinted.se/member*",
+        "*://*.vinted.se/items/new*",
+        "*://*.vinted.dk/member*",
+        "*://*.vinted.dk/items/new*",
+        "*://*.vinted.fi/member*",
+        "*://*.vinted.fi/items/new*",
+        "*://*.vinted.pt/member*",
+        "*://*.vinted.pt/items/new*",
+        "*://*.vinted.gr/member*",
+        "*://*.vinted.gr/items/new*",
+        "*://*.vinted.hr/member*",
+        "*://*.vinted.hr/items/new*",
+        "*://*.vinted.bg/member*",
+        "*://*.vinted.bg/items/new*",
+        "*://*.vinted.si/member*",
+        "*://*.vinted.si/items/new*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lang/*.json"
+      ],
+      "matches": [
+        "*://*.vinted.com/*",
+        "*://*.vinted.co.uk/*",
+        "*://*.vinted.ie/*",
+        "*://*.vinted.de/*",
+        "*://*.vinted.at/*",
+        "*://*.vinted.be/*",
+        "*://*.vinted.fr/*",
+        "*://*.vinted.lu/*",
+        "*://*.vinted.nl/*",
+        "*://*.vinted.es/*",
+        "*://*.vinted.it/*",
+        "*://*.vinted.pl/*",
+        "*://*.vinted.lt/*",
+        "*://*.vinted.lv/*",
+        "*://*.vinted.ee/*",
+        "*://*.vinted.cz/*",
+        "*://*.vinted.sk/*",
+        "*://*.vinted.hu/*",
+        "*://*.vinted.ro/*",
+        "*://*.vinted.se/*",
+        "*://*.vinted.dk/*",
+        "*://*.vinted.fi/*",
+        "*://*.vinted.pt/*",
+        "*://*.vinted.gr/*",
+        "*://*.vinted.hr/*",
+        "*://*.vinted.bg/*",
+        "*://*.vinted.si/*"
+      ]
+    }
+  ]
+}
