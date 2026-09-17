@@ -519,9 +519,22 @@
 
     if (mode === "home") {
       const home = document.createElement("div");
-      home.className = "revint-panel revint-panel--home";
+      home.className = "revint-panel revint-panel--home revint-collapsed";
       home.dataset.mode = mode;
-      home.innerHTML = `<div class="revint-panel-title">ReVint</div><div class="revint-home-hint">${t("homeHint")} <button type="button" class="revint-home-button">${t("homeButton")}</button></div>`;
+      home.innerHTML = [
+        '<div class="revint-panel-head">',
+        '<div class="revint-panel-title">ReVint</div>',
+        '<button type="button" class="revint-collapse-button" aria-label="Panel ein-/ausklappen">▾</button>',
+        '</div>',
+        '<div class="revint-body revint-home-body">',
+        `<div class="revint-home-hint">${t("homeHint")} <button type="button" class="revint-home-button">${t("homeButton")}</button></div>`,
+        '</div>'
+      ].join("");
+      const collapse = home.querySelector(".revint-collapse-button");
+      collapse.addEventListener("click", () => {
+        const collapsed = home.classList.toggle("revint-collapsed");
+        collapse.textContent = collapsed ? "▾" : "▴";
+      });
       home.querySelector(".revint-home-button").addEventListener("click", () => location.assign(findMemberUrl()));
       document.body.appendChild(home);
       return;

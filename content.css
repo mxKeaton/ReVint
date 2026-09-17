@@ -104,10 +104,12 @@
   max-width: 300px;
   width: auto;
 }
+.revint-home-body { text-align: center; }
 .revint-home-hint {
   color: #333;
   font: 13px/18px Arial, sans-serif;
   padding: 0 4px;
+  text-align: center;
 }
 .revint-home-button {
   background: none;
