@@ -6,6 +6,7 @@
   const PAGE_SIZE = 20;
   const OPEN_DELAY = 6000;
   const BATCH_DELAY = 1200;
+  const IMAGE_CONCURRENCY = 4;
 
   let revintBusy = false;
   window.addEventListener("beforeunload", (event) => {
@@ -296,15 +297,24 @@
   }
 
   async function embedImages(urls, status) {
-    const images = [];
-    for (let i = 0; i < urls.length; i++) {
-      status(`Bild ${i + 1}/${urls.length} wird lokal gespeichert …`);
-      const response = await message({ type: "fetch-image", url: urls[i] });
-      if (response?.ok) images.push({ name: `image-${i + 1}.${extension(response.image.type)}`, ...response.image });
-      else console.error(`[ReVint] Bild ${i + 1} konnte nicht gespeichert werden:`, response?.error || "Unbekannter Fehler", urls[i]);
+    if (!urls.length) {
+      console.error("[ReVint] Keine Bild-URLs in der Relisting-Seite gefunden.");
+      return [];
     }
-    if (!urls.length) console.error("[ReVint] Keine Bild-URLs in der Relisting-Seite gefunden.");
-    return images;
+    const images = new Array(urls.length);
+    let next = 0;
+    let done = 0;
+    const worker = async () => {
+      while (next < urls.length) {
+        const index = next++;
+        const response = await message({ type: "fetch-image", url: urls[index] });
+        if (response?.ok) images[index] = { name: `image-${index + 1}.${extension(response.image.type)}`, ...response.image };
+        else console.error(`[ReVint] Bild ${index + 1} konnte nicht gespeichert werden:`, response?.error || "Unbekannter Fehler", urls[index]);
+        status(`Bild ${++done}/${urls.length} wird lokal gespeichert …`);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(IMAGE_CONCURRENCY, urls.length) }, worker));
+    return images.filter(Boolean);
   }
 
   function extension(type) {
@@ -403,9 +413,8 @@
     const bundle = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), item };
     const safeTitle = (item.title || "artikel").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
     const filename = `${safeTitle}.revint.json`;
-    const contents = JSON.stringify(bundle);
 
-    const saved = await message({ type: "save-file", filename, contents, sourceUrl: item.sourceUrl || card.url });
+    const saved = await message({ type: "save-file", filename, bundle, sourceUrl: item.sourceUrl || card.url });
     if (!saved?.ok) throw new Error(saved?.error || "Speichern fehlgeschlagen");
   }
 
@@ -656,7 +665,7 @@
         return;
       }
       try {
-        await fillForm(JSON.parse(loaded.text), report);
+        await fillForm(loaded.bundle, report);
       } catch (error) {
         console.error("[ReVint] Import fehlgeschlagen:", error, error?.stack || "");
       }
