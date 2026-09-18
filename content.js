@@ -578,10 +578,39 @@
     return link ? new URL(link.href, location.href).href : "";
   }
 
+  function userMenuTrigger() {
+    return document.querySelector('[data-testid="user-menu-button"]')
+      || document.querySelector('[data-testid*="user-menu"]')
+      || document.querySelector('[data-testid*="avatar"], [data-testid*="profile"]')
+      || [...document.querySelectorAll("button, [role='button']")].find((element) =>
+        /profil|profile|konto|account|menü|menu|χρήστ|λογαριασ/i.test(element.getAttribute("aria-label") || "")
+      )
+      || null;
+  }
+
+  function userIdFromPayload(data) {
+    if (!data || typeof data !== "object") return null;
+    for (const candidate of [data.user, data.current_user, data.data, data]) {
+      if (candidate && (typeof candidate.id === "number" || typeof candidate.id === "string")) return candidate.id;
+    }
+    return null;
+  }
+
+  async function findMemberUrlFromApi() {
+    try {
+      const response = await message({ type: "fetch-text", url: `${location.origin}/api/v2/users/current` });
+      if (!response?.ok) return "";
+      const id = userIdFromPayload(JSON.parse(response.text));
+      return id ? `${location.origin}/member/${id}` : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   async function openMemberPage() {
     let url = findMemberUrl();
     if (!url) {
-      const trigger = document.querySelector('[data-testid="user-menu-button"]');
+      const trigger = userMenuTrigger();
       if (trigger) {
         trigger.click();
         for (let attempt = 0; attempt < 12 && !url; attempt++) {
@@ -590,6 +619,7 @@
         }
       }
     }
+    if (!url) url = await findMemberUrlFromApi();
     if (url) location.assign(url);
     else console.warn(`[ReVint] ${t("logNoMember")}`);
   }
