@@ -11,7 +11,7 @@ ReVint saves your own Vinted listings and helps you re-post them.
 
 - Save listings: on your member page, click "Save as relisting". ReVint stores the title, description, price, category, size, condition, brand, colour, material, ISBN, platform, age rating and photos locally in the extension.
 - Re-post: the ReVint panel lists your saved relistings. Click one to open the sell form and fill it automatically.
-- Batch: select several relistings and open them one by one, with a delay so Vinted's request limits are respected.
+- Batch: Relist several entries one by one.
 - Works on all Vinted domains and in 22 languages (language follows the domain).
 - Everything stays on your device. ReVint sends nothing to any server.
 
