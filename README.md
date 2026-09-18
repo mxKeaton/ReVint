@@ -56,4 +56,4 @@ Auf der Mitgliederseite bietet das Panel zwei Sammelaktionen: alle aktuell auf d
 
 ## Veröffentlichung (Chrome Web Store)
 
-Unter `store/` liegen Platzhalter für die Store-Assets und -Texte (`listing.md`, `reviewer-notes.md`, `privacy-policy.md`) sowie Screenshots und ein Promotion-Bild. Die Icons unter `icons/` sind ebenfalls Platzhalter. Vor der Veröffentlichung: echte Bilder einsetzen, die TODOs in den Texten (Datum, Name, GitHub-URLs) füllen und die Datenschutzerklärung über GitHub Pages verlinken. `manifest.json` enthält `homepage_url` als Platzhalter.
+Unter `store/` liegen die Store-Texte (`listing.md`, `reviewer-notes.md`) sowie Screenshots und ein Promotion-Bild; die Datenschutzerklärung liegt unter `docs/privacy-policy.md` und ist über GitHub Pages veröffentlicht (`https://mxkeaton.github.io/ReVint/privacy-policy.html`). Die Bilder unter `icons/` und `store/` sind noch Platzhalter. Vor der Veröffentlichung: echte Icons/Screenshots einsetzen und `store/listing.md` finalisieren.
