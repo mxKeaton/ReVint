@@ -40,7 +40,5 @@
   "optionsError": "Eroare: {message}",
   "folderNone": "niciun folder ales",
   "homeHint": "Pentru a începe relistingul, mergi la",
-  "homeButton": "pagina de membru",
-  "importWorking": "Se aplică …",
-  "importBusy": "Nu atinge nimic până când procesul se termină."
+  "homeButton": "pagina de membru"
 }

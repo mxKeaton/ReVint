@@ -40,7 +40,5 @@
   "optionsError": "Σφάλμα: {message}",
   "folderNone": "δεν έχει επιλεγεί φάκελος",
   "homeHint": "Για να ξεκινήσετε το relisting, μεταβείτε στη",
-  "homeButton": "σελίδα μέλους",
-  "importWorking": "Εφαρμογή …",
-  "importBusy": "Μην αγγίξετε τίποτα μέχρι να ολοκληρωθεί η διαδικασία."
+  "homeButton": "σελίδα μέλους"
 }

@@ -40,7 +40,5 @@
   "optionsError": "Error: {message}",
   "folderNone": "no folder chosen",
   "homeHint": "To start relisting switch to the",
-  "homeButton": "member page",
-  "importWorking": "Applying …",
-  "importBusy": "Please don’t touch anything until this is done."
+  "homeButton": "member page"
 }

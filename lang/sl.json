@@ -40,7 +40,5 @@
   "optionsError": "Napaka: {message}",
   "folderNone": "mapa ni izbrana",
   "homeHint": "Za začetek relistinga pojdite na",
-  "homeButton": "stran člana",
-  "importWorking": "Uporabljam …",
-  "importBusy": "Ničesar se ne dotikajte, dokler postopek ni končan."
+  "homeButton": "stran člana"
 }

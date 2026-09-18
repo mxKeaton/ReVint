@@ -40,7 +40,5 @@
   "optionsError": "Klaida: {message}",
   "folderNone": "nepasirinktas aplankas",
   "homeHint": "Norėdami pradėti relistingą, eikite į",
-  "homeButton": "nario puslapį",
-  "importWorking": "Taikoma …",
-  "importBusy": "Nieko nelieskite, kol procesas nebaigtas."
+  "homeButton": "nario puslapį"
 }

@@ -6,7 +6,6 @@
   const PAGE_SIZE = 20;
   const OPEN_DELAY = 6000;
   const BATCH_DELAY = 1200;
-  const IMAGE_CONCURRENCY = 3;
 
   let revintBusy = false;
   window.addEventListener("beforeunload", (event) => {
@@ -297,24 +296,15 @@
   }
 
   async function embedImages(urls, status) {
-    if (!urls.length) {
-      console.error("[ReVint] Keine Bild-URLs in der Relisting-Seite gefunden.");
-      return [];
+    const images = [];
+    for (let i = 0; i < urls.length; i++) {
+      status(`Bild ${i + 1}/${urls.length} wird lokal gespeichert …`);
+      const response = await message({ type: "fetch-image", url: urls[i] });
+      if (response?.ok) images.push({ name: `image-${i + 1}.${extension(response.image.type)}`, ...response.image });
+      else console.error(`[ReVint] Bild ${i + 1} konnte nicht gespeichert werden:`, response?.error || "Unbekannter Fehler", urls[i]);
     }
-    const images = new Array(urls.length);
-    let next = 0;
-    let done = 0;
-    const worker = async () => {
-      while (next < urls.length) {
-        const index = next++;
-        const response = await message({ type: "fetch-image", url: urls[index] });
-        if (response?.ok) images[index] = { name: `image-${index + 1}.${extension(response.image.type)}`, ...response.image };
-        else console.error(`[ReVint] Bild ${index + 1} konnte nicht gespeichert werden:`, response?.error || "Unbekannter Fehler", urls[index]);
-        status(`Bild ${++done}/${urls.length} wird lokal gespeichert …`);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(IMAGE_CONCURRENCY, urls.length) }, worker));
-    return images.filter(Boolean);
+    if (!urls.length) console.error("[ReVint] Keine Bild-URLs in der Relisting-Seite gefunden.");
+    return images;
   }
 
   function extension(type) {
@@ -413,8 +403,9 @@
     const bundle = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), item };
     const safeTitle = (item.title || "artikel").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
     const filename = `${safeTitle}.revint.json`;
+    const contents = JSON.stringify(bundle);
 
-    const saved = await message({ type: "save-file", filename, bundle, sourceUrl: item.sourceUrl || card.url });
+    const saved = await message({ type: "save-file", filename, contents, sourceUrl: item.sourceUrl || card.url });
     if (!saved?.ok) throw new Error(saved?.error || "Speichern fehlgeschlagen");
   }
 
@@ -497,23 +488,7 @@
   function findMemberUrl() {
     const link = [...document.querySelectorAll('a[href*="/member/"]')]
       .find((element) => /\/member\/\d+/.test(element.getAttribute("href") || ""));
-    return link ? new URL(link.href, location.href).href : "";
-  }
-
-  async function openMemberPage() {
-    let url = findMemberUrl();
-    if (!url) {
-      const trigger = document.querySelector('[data-testid="user-menu-button"]');
-      if (trigger) {
-        trigger.click();
-        for (let attempt = 0; attempt < 12 && !url; attempt++) {
-          await wait(150);
-          url = findMemberUrl();
-        }
-      }
-    }
-    if (url) location.assign(url);
-    else console.warn("[ReVint] Mitgliederseite wurde nicht gefunden.");
+    return link ? new URL(link.href, location.href).href : `${location.origin}/member`;
   }
 
   async function enqueueAutoImport(name) {
@@ -560,7 +535,7 @@
         const collapsed = home.classList.toggle("revint-collapsed");
         collapse.textContent = collapsed ? "▾" : "▴";
       });
-      home.querySelector(".revint-home-button").addEventListener("click", openMemberPage);
+      home.querySelector(".revint-home-button").addEventListener("click", () => location.assign(findMemberUrl()));
       document.body.appendChild(home);
       return;
     }
@@ -594,11 +569,6 @@
       mode === "member"
         ? `<button type="button" class="revint-button revint-export-all">${t("saveAll")}</button><button type="button" class="revint-button revint-export-active">${t("saveListed")}</button>`
         : `<button type="button" class="revint-button revint-manual-button">${t("manual")}</button><input type="file" accept=".json,.revint.json,application/json" hidden>`,
-      '</div>',
-      '<div class="revint-import-view" hidden>',
-      '<div class="revint-progress revint-progress--import"><div class="revint-progress-bar"></div></div>',
-      '<div class="revint-import-status"></div>',
-      `<div class="revint-busy-note">${t("importBusy")}</div>`,
       '</div>'
     ].join("");
 
@@ -613,21 +583,7 @@
     const progressBar = panel.querySelector(".revint-progress-bar");
     const progressLabel = panel.querySelector(".revint-progress-label");
     const busyNote = panel.querySelector(".revint-busy-note");
-    const importStatus = panel.querySelector(".revint-import-status");
     const report = (text) => console.info(`[ReVint] ${text}`);
-
-    let wasCollapsed = true;
-    panel.showImport = () => {
-      wasCollapsed = panel.classList.contains("revint-collapsed");
-      panel.classList.remove("revint-collapsed");
-      panel.classList.add("revint-importing");
-      importStatus.textContent = t("importWorking");
-    };
-    panel.setImportStatus = (text) => { if (text) importStatus.textContent = text; };
-    panel.hideImport = () => {
-      panel.classList.remove("revint-importing");
-      if (wasCollapsed) panel.classList.add("revint-collapsed");
-    };
 
     const progress = {
       start(total) {
@@ -683,14 +639,10 @@
         console.error("[ReVint] Datei konnte nicht gelesen werden:", loaded?.error);
         return;
       }
-      panel.showImport();
       try {
-        await fillForm(loaded.bundle, (text) => panel.setImportStatus(text));
+        await fillForm(JSON.parse(loaded.text), report);
       } catch (error) {
         console.error("[ReVint] Import fehlgeschlagen:", error, error?.stack || "");
-      } finally {
-        panel.hideImport();
-        await refresh();
       }
     };
 
@@ -841,14 +793,11 @@
       const input = panel.querySelector("input[type=file]");
       manualButton.addEventListener("click", () => input.click());
       input.addEventListener("change", async () => {
-        panel.showImport();
         try {
           const bundle = JSON.parse(await input.files[0].text());
-          await fillForm(bundle, (text) => panel.setImportStatus(text));
+          await fillForm(bundle, report);
         } catch (error) {
           console.error("[ReVint] Import fehlgeschlagen:", error, error?.stack || "");
-        } finally {
-          panel.hideImport();
         }
         input.value = "";
       });
@@ -1424,16 +1373,6 @@
     return false;
   }
 
-  async function waitForFileInput(timeout = 5000) {
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) {
-      const input = [...document.querySelectorAll('input[type="file"]')].find((element) => !element.closest(".revint-panel"));
-      if (input) return input;
-      await wait(200);
-    }
-    return null;
-  }
-
   function dataUrlFile(image) {
     const bytes = Uint8Array.from(atob(image.data), (char) => char.charCodeAt(0));
     return new File([bytes], image.name, { type: image.type });
@@ -1444,12 +1383,10 @@
     const item = bundle.item;
     console.info("[ReVint] Zu importierende Relisting-Daten:", item);
     let filled = 0;
-    status(t("importWorking"));
     if (await setTextWhenReady(["titel", "title"], item.title, 8000)) filled++;
     if (await setTextWhenReady(["beschreibung", "description"], item.description, 8000)) filled++;
 
-    status(t("importWorking"));
-    const fileInput = await waitForFileInput();
+    const fileInput = [...document.querySelectorAll('input[type="file"]')].find((input) => input !== document.querySelector(".revint-panel input"));
     if (fileInput && item.images?.length) {
       const transfer = new DataTransfer();
       item.images.forEach((image) => transfer.items.add(dataUrlFile(image)));
@@ -1460,7 +1397,7 @@
     } else if (!item.images?.length) console.error("[ReVint] Die ReVint-Datei enthält keine Bilder. Bitte das Relisting erneut exportieren.");
     else console.error("[ReVint] Vinteds Datei-Eingabefeld wurde nicht gefunden.");
 
-    const categories = await fillCategory(item, status);
+    const categories = await fillCategory(item);
     const condition = await fillVintedDropdown("zustand", [
       "[data-testid='condition-select-dropdown-input']",
       "[data-testid='condition-select-dropdown-chevron']",
@@ -1473,10 +1410,8 @@
     const brand = await fillBrand(item, status);
     const colors = await fillColor(item, status);
     const material = await fillAttribute("material", "Material", materialCandidates(item.material), status);
-    status(t("importWorking"));
     const isbn = await setTextWhenReady(["isbn"], item.isbn);
     if (isbn) filled++;
-    status(t("importWorking"));
     const price = await setPrice(item.price);
     if (price) filled++;
     const notes = [

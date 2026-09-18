@@ -40,7 +40,5 @@
   "optionsError": "Fejl: {message}",
   "folderNone": "ingen mappe valgt",
   "homeHint": "For at begynde at reliste, gå til",
-  "homeButton": "medlemssiden",
-  "importWorking": "Anvender …",
-  "importBusy": "Rør ikke ved noget, før processen er færdig."
+  "homeButton": "medlemssiden"
 }

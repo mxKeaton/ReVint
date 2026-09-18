@@ -40,7 +40,5 @@
   "optionsError": "Chyba: {message}",
   "folderNone": "není vybrána složka",
   "homeHint": "Chcete-li začít relisting, přejděte na",
-  "homeButton": "stránku člena",
-  "importWorking": "Aplikuji …",
-  "importBusy": "Nic neklikejte, dokud proces neskončí."
+  "homeButton": "stránku člena"
 }

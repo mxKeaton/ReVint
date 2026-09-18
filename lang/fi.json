@@ -40,7 +40,5 @@
   "optionsError": "Virhe: {message}",
   "folderNone": "kansiota ei valittu",
   "homeHint": "Aloita relistaus siirtymällä",
-  "homeButton": "jäsen-sivulle",
-  "importWorking": "Sovelletaan …",
-  "importBusy": "Älä koske mihinkään, ennen kuin prosessi on valmis."
+  "homeButton": "jäsen-sivulle"
 }

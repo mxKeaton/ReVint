@@ -40,7 +40,5 @@
   "optionsError": "Fout: {message}",
   "folderNone": "geen map gekozen",
   "homeHint": "Om te beginnen met relisten, ga naar de",
-  "homeButton": "ledenpagina",
-  "importWorking": "Toepassen …",
-  "importBusy": "Raak niets aan totdat het proces klaar is."
+  "homeButton": "ledenpagina"
 }

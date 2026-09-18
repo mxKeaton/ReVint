@@ -40,7 +40,5 @@
   "optionsError": "Erreur : {message}",
   "folderNone": "aucun dossier choisi",
   "homeHint": "Pour commencer le relisting, va sur la",
-  "homeButton": "page membre",
-  "importWorking": "Application …",
-  "importBusy": "Ne touchez à rien jusqu’à la fin du processus."
+  "homeButton": "page membre"
 }

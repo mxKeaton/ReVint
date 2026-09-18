@@ -40,7 +40,5 @@
   "optionsError": "Chyba: {message}",
   "folderNone": "nie je vybraný priečinok",
   "homeHint": "Ak chcete začať relisting, prejdite na",
-  "homeButton": "stránku člena",
-  "importWorking": "Aplikujem …",
-  "importBusy": "Nič neklikajte, kým sa proces neskončí."
+  "homeButton": "stránku člena"
 }

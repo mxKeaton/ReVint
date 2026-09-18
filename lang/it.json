@@ -40,7 +40,5 @@
   "optionsError": "Errore: {message}",
   "folderNone": "nessuna cartella scelta",
   "homeHint": "Per iniziare a rilistare, vai alla",
-  "homeButton": "pagina membro",
-  "importWorking": "Applicazione …",
-  "importBusy": "Non toccare nulla finché il processo non è terminato."
+  "homeButton": "pagina membro"
 }

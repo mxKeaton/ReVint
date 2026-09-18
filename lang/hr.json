@@ -40,7 +40,5 @@
   "optionsError": "Greška: {message}",
   "folderNone": "mapa nije odabrana",
   "homeHint": "Za početak relistinga idite na",
-  "homeButton": "stranicu člana",
-  "importWorking": "Primjenjujem …",
-  "importBusy": "Ne dirajte ništa dok se postupak ne završi."
+  "homeButton": "stranicu člana"
 }
