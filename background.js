@@ -163,18 +163,39 @@ function toBase64(bytes) {
   return btoa(latin1Decoder.decode(bytes));
 }
 
+const IMAGE_CONCURRENCY = 4;
+const IMAGE_EXTENSIONS = { "image/png": "png", "image/webp": "webp", "image/jpeg": "jpg" };
+
+async function fetchImage(url) {
+  const response = await fetchWithCredentials(url);
+  const blob = await response.blob();
+  if (blob.size > MAX_IMAGE_BYTES) throw new Error("too big");
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return { data: toBase64(bytes), type: blob.type || "image/jpeg" };
+}
+
+async function embedImages(urls) {
+  const images = new Array(urls.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < urls.length) {
+      const index = next++;
+      try {
+        const image = await fetchImage(urls[index]);
+        images[index] = { name: `image-${index + 1}.${IMAGE_EXTENSIONS[image.type] || "jpg"}`, ...image };
+      } catch (error) {
+        console.error(`[ReVint] Bild ${index + 1} fehlgeschlagen:`, error.message, urls[index]);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(IMAGE_CONCURRENCY, urls.length) }, worker));
+  return images.filter(Boolean);
+}
+
 const handlers = {
   "fetch-text": async ({ url }) => {
     const response = await fetchWithCredentials(url);
     return { text: await response.text(), url: response.url };
-  },
-
-  "fetch-image": async ({ url }) => {
-    const response = await fetchWithCredentials(url);
-    const blob = await response.blob();
-    if (blob.size > MAX_IMAGE_BYTES) throw new Error("Bild ist größer als 15 MB");
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    return { image: { data: toBase64(bytes), type: blob.type || "image/jpeg" } };
   },
 
   "list-files": async () => {
@@ -190,13 +211,21 @@ const handlers = {
     return { name, bundle: entry.bundle };
   },
 
-  "save-file": async ({ filename, bundle, sourceUrl }) => {
-    if (!bundle) throw new Error("INVALID_BUNDLE");
-    const name = await resolveName(filename, sourceUrl || bundle?.item?.sourceUrl);
+  "open-tab": async ({ url, active }) => {
+    const tab = await chrome.tabs.create({ url, active: active !== false });
+    return { tabId: tab.id };
+  },
+
+  "save-file": async ({ filename, item, sourceUrl, format, version }) => {
+    if (!item) throw new Error("INVALID_ITEM");
+    const itemWithImages = { ...item, images: await embedImages(item.imageUrls || []) };
+    delete itemWithImages.imageUrls;
+    const bundle = { format, version, exportedAt: new Date().toISOString(), item: itemWithImages };
+    const name = await resolveName(filename, sourceUrl || item.sourceUrl);
     await saveEntry({
       name,
-      sourceUrl: sourceUrl || bundle?.item?.sourceUrl || "",
-      title: bundle?.item?.title || name,
+      sourceUrl: sourceUrl || item.sourceUrl || "",
+      title: item.title || name,
       createdAt: Date.now(),
       bundle
     });
