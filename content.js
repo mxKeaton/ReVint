@@ -6,6 +6,7 @@
   const PAGE_SIZE = 20;
   const OPEN_DELAY = 6000;
   const BATCH_DELAY = 1200;
+  const IMAGE_CONCURRENCY = 4;
 
   let revintBusy = false;
   let contextInvalidated = false;
@@ -36,6 +37,7 @@
   let MESSAGES = {};
   let messagesReady = false;
   let messagesLoading = null;
+  let detectedLanguage = "";
 
   function languageFromHostname(hostname) {
     const host = String(hostname || "").replace(/^www\./, "");
@@ -64,6 +66,7 @@
           try { chosen = await fetchMessages(code); } catch (_) { chosen = english; }
         }
         MESSAGES = { ...english, ...chosen };
+        detectedLanguage = code || "en";
         messagesReady = true;
       })();
     }
@@ -322,15 +325,26 @@
   }
 
   async function embedImages(urls, status) {
-    const images = [];
-    for (let i = 0; i < urls.length; i++) {
-      status(t("statusImage", { done: i + 1, total: urls.length }));
-      const response = await message({ type: "fetch-image", url: urls[i] });
-      if (response?.ok) images.push({ name: `image-${i + 1}.${extension(response.image.type)}`, ...response.image });
-      else console.error(`[ReVint] ${t("statusImageFailed", { index: i + 1 })}`, response?.error || t("statusUnknown"), urls[i]);
+    if (!urls.length) {
+      console.error(`[ReVint] ${t("logNoImageUrls")}`);
+      return [];
     }
-    if (!urls.length) console.error(`[ReVint] ${t("logNoImageUrls")}`);
-    return images;
+    const results = new Array(urls.length);
+    let next = 0;
+    let finished = 0;
+    const worker = async () => {
+      for (;;) {
+        const index = next++;
+        if (index >= urls.length) return;
+        const response = await message({ type: "fetch-image", url: urls[index] });
+        finished++;
+        status(t("statusImage", { done: finished, total: urls.length }));
+        if (response?.ok) results[index] = { name: `image-${index + 1}.${extension(response.image.type)}`, ...response.image };
+        else console.error(`[ReVint] ${t("statusImageFailed", { index: index + 1 })}`, response?.error || t("statusUnknown"), urls[index]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(IMAGE_CONCURRENCY, urls.length) }, worker));
+    return results.filter(Boolean);
   }
 
   function extension(type) {
@@ -785,7 +799,9 @@
       }
       panel.showProgress();
       try {
-        await fillForm(JSON.parse(loaded.text), report, (done, total) => panel.setProgress(done, total));
+        const bundle = JSON.parse(loaded.text);
+        rememberOriginal(bundle, name);
+        await fillForm(bundle, report, (done, total) => panel.setProgress(done, total));
       } catch (error) {
         console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
       } finally {
@@ -967,6 +983,7 @@
         panel.showProgress();
         try {
           const bundle = JSON.parse(await input.files[0].text());
+          rememberOriginal(bundle, input.files[0].name);
           await fillForm(bundle, report, (done, total) => panel.setProgress(done, total));
         } catch (error) {
           console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
@@ -991,6 +1008,35 @@
     }
   }
 
+  // Vinted renders button labels inside an inner element that carries the
+  // webfont, so the font must be read from (and written to) that host rather
+  // than the outer <button>.
+  function textHost(element) {
+    const original = clean(element.textContent);
+    const nodes = [...element.querySelectorAll("*")];
+    const exact = nodes.find((el) => !el.querySelector("*") && clean(el.textContent) === original);
+    if (exact) return exact;
+    const withText = nodes.filter((el) => clean(el.textContent));
+    return withText.length ? withText[withText.length - 1] : element;
+  }
+
+  function applyTextStyle(target, source) {
+    try {
+      const style = getComputedStyle(source);
+      target.style.fontFamily = style.fontFamily;
+      target.style.fontSize = style.fontSize;
+      target.style.fontWeight = style.fontWeight;
+      target.style.fontStyle = style.fontStyle;
+      target.style.lineHeight = style.lineHeight;
+      target.style.letterSpacing = style.letterSpacing;
+      target.style.textTransform = style.textTransform;
+    } catch (_) {}
+  }
+
+  function setButtonLabel(button, label) {
+    textHost(button).textContent = label;
+  }
+
   function addSaveButtons() {
     const candidates = document.querySelectorAll("button:not([data-revint-scanned]), a:not([data-revint-scanned])");
     for (const push of candidates) {
@@ -1002,16 +1048,258 @@
       button.type = "button";
       button.className = "revint-button revint-inline";
       button.textContent = t("saveOne");
-      try {
-        const style = getComputedStyle(push);
-        button.style.fontFamily = style.fontFamily;
-        button.style.fontSize = style.fontSize;
-        button.style.fontWeight = style.fontWeight;
-        button.style.lineHeight = style.lineHeight;
-        button.style.letterSpacing = style.letterSpacing;
-      } catch (_) {}
+      applyTextStyle(button, textHost(push));
       button.addEventListener("click", () => exportItem(button));
       push.insertAdjacentElement("afterend", button);
+    }
+  }
+
+  const STORAGE_ORIGINAL = "revintOriginal";
+  const STORAGE_PENDING_DELETE = "revintDeleteAfterPublish";
+  const PENDING_DELETE_TTL = 5 * 60 * 1000;
+
+  const DRAFT_ACTION_LABELS = [
+    "entwurf speichern", "save draft", "save as draft", "guardar borrador",
+    "enregistrer le brouillon", "salva bozza", "opslaan als concept",
+    "zapisz szkic", "salvesta mustand", "ulozit koncept", "mentés",
+    "spara utkast", "gem kladde", "tallenna luonnos", "guardar rascunho",
+    "saglabat melnrakstu", "issaugoti juodrasti", "salveaza ca ciorna",
+    "shrani osnutek"
+  ];
+  const SUBMIT_ACTION_LABELS = [
+    "hochladen", "upload", "publish", "publicar", "publier", "carica",
+    "opublikuj", "δημοσίευση", "nahrát", "nahrať", "julkaise", "publica",
+    "objavi", "публикуване", "ladda upp", "læg op", "lataa",
+    "augšupielādēt", "įkelti", "încarcă", "naloži", "опубликовать"
+  ];
+
+  let formLabelsCache = null;
+
+  function readJsonStorage(key) {
+    try {
+      const value = sessionStorage.getItem(key);
+      return value ? JSON.parse(value) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function readOriginal() {
+    const info = readJsonStorage(STORAGE_ORIGINAL);
+    return info?.id ? info : null;
+  }
+
+  function rememberOriginal(bundle, filename) {
+    const url = bundle?.item?.sourceUrl || "";
+    const match = String(url).match(/\/items\/(\d+)/);
+    if (!match) return;
+    try {
+      sessionStorage.setItem(STORAGE_ORIGINAL, JSON.stringify({ id: match[1], url, file: filename || "", at: Date.now() }));
+    } catch (_) {}
+    schedulePublishButton();
+  }
+
+  let publishButtonTimer = null;
+  function schedulePublishButton() {
+    if (document.querySelector(".revint-publish-delete")) return;
+    if (!readOriginal()) return;
+    addPublishDeleteButton();
+    if (document.querySelector(".revint-publish-delete")) return;
+    if (publishButtonTimer) return;
+    let attempts = 0;
+    publishButtonTimer = setInterval(() => {
+      if (document.querySelector(".revint-publish-delete") || !readOriginal() || ++attempts > 30) {
+        clearInterval(publishButtonTimer);
+        publishButtonTimer = null;
+        return;
+      }
+      addPublishDeleteButton();
+    }, 500);
+  }
+
+  function csrfToken() {
+    for (const script of document.scripts) {
+      const text = script.textContent || "";
+      const match = text.match(/CSRF_TOKEN\\?":\\?"([0-9A-Fa-f-]+)/);
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  async function deleteOriginalItem(pending) {
+    const token = csrfToken();
+    if (!token) {
+      console.warn(`[ReVint] ${t("logNoCsrf")}`);
+      return false;
+    }
+    let origin = location.origin;
+    try { origin = new URL(pending.url).origin; } catch (_) {}
+    const response = await message({ type: "delete-item", url: `${origin}/api/v2/items/${pending.id}/delete`, csrfToken: token });
+    return Boolean(response?.ok);
+  }
+
+  let consumingPendingDelete = false;
+  async function consumePendingDelete() {
+    if (consumingPendingDelete) return;
+    const pending = readJsonStorage(STORAGE_PENDING_DELETE);
+    if (!pending?.id) return;
+    if (Date.now() - (pending.at || 0) > PENDING_DELETE_TTL) {
+      try { sessionStorage.removeItem(STORAGE_PENDING_DELETE); } catch (_) {}
+      return;
+    }
+    if (location.pathname.startsWith("/items/new")) return;
+    consumingPendingDelete = true;
+    try { sessionStorage.removeItem(STORAGE_PENDING_DELETE); } catch (_) {}
+    try {
+      if (await deleteOriginalItem(pending)) console.info(`[ReVint] ${t("logDeletedOriginal", { id: pending.id })}`);
+      else console.error(`[ReVint] ${t("logDeleteOriginalFailed", { id: pending.id })}`);
+    } finally {
+      consumingPendingDelete = false;
+    }
+  }
+
+  function vintedLabel(key) {
+    for (const script of document.scripts) {
+      const text = script.textContent || "";
+      const index = text.indexOf(key);
+      if (index === -1) continue;
+      const match = text.slice(index + key.length).match(/^\\?":\\?"([^"\\]+)/);
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  function formLabels() {
+    if (!formLabelsCache) {
+      formLabelsCache = {
+        draft: vintedLabel("item_upload.form_actions.save_draft"),
+        submit: vintedLabel("item_upload.form_actions.submit")
+      };
+    }
+    return formLabelsCache;
+  }
+
+  function buttonMatchesText(button, labels) {
+    const text = matchText(button.textContent);
+    if (!text) return false;
+    return labels.some((label) => {
+      const target = matchText(label);
+      return target.length > 2 && (text === target || text.includes(target));
+    });
+  }
+
+  function findFormActionButtons() {
+    const buttons = [...document.querySelectorAll("button, [role='button'], a[href]")]
+      .filter(isInteractable)
+      .filter((button) => !button.closest("header, nav, [role='navigation'], [role='tablist'], [role='tab'], .revint-panel, .revint-publish-delete"));
+    const testId = (button) => button.getAttribute("data-testid") || "";
+    const { draft: draftLabel, submit: submitLabel } = formLabels();
+    const bottomOf = (button) => {
+      try { return button.getBoundingClientRect().bottom; } catch (_) { return 0; }
+    };
+    const isDraft = (button) => {
+      if (/draft/i.test(testId(button))) return true;
+      const text = matchText(button.textContent);
+      if (draftLabel && text === matchText(draftLabel)) return true;
+      return buttonMatchesText(button, DRAFT_ACTION_LABELS);
+    };
+    const submitScore = (button) => {
+      if (isDraft(button)) return 0;
+      const text = matchText(button.textContent);
+      if (submitLabel && text === matchText(submitLabel)) return 3;
+      if (/submit|upload/i.test(testId(button))) return 2;
+      return buttonMatchesText(button, SUBMIT_ACTION_LABELS) ? 1 : 0;
+    };
+    // The real publish button is the best-scoring, bottom-most candidate so a
+    // top toolbar "save/upload" control cannot win over the footer bar.
+    const submit = buttons
+      .map((button) => ({ button, score: submitScore(button) }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || bottomOf(b.button) - bottomOf(a.button))[0]?.button || null;
+    let draft = null;
+    if (submit?.parentElement) {
+      draft = [...submit.parentElement.querySelectorAll("button, [role='button'], a[href]")].find(isDraft) || null;
+    }
+    if (!draft) draft = buttons.find(isDraft) || null;
+    return { draft, submit };
+  }
+
+  function addPublishDeleteButton() {
+    if (!readOriginal()) return;
+    if (document.querySelector(".revint-publish-delete")) return;
+    const { draft, submit } = findFormActionButtons();
+    if (!submit) return;
+    // Clone a native button so all layout/typography classes match exactly,
+    // then only override the colours to signal the destructive action.
+    const button = (draft || submit).cloneNode(true);
+    button.type = "button";
+    button.classList.add("revint-publish-delete");
+    button.removeAttribute("data-testid");
+    button.removeAttribute("id");
+    button.removeAttribute("aria-label");
+    button.removeAttribute("disabled");
+    button.disabled = false;
+    setButtonLabel(button, t("publishDelete"));
+    button.style.setProperty("background", "#fff", "important");
+    button.style.setProperty("border-color", "#c62828", "important");
+    button.style.setProperty("color", "#c62828", "important");
+    button.style.setProperty("flex", "0 0 auto", "important");
+    button.addEventListener("click", () => uploadAndDelete(button));
+    // Sit directly next to the real publish button in the footer action bar.
+    submit.insertAdjacentElement("beforebegin", button);
+    // Whatever layout Vinted uses, make the gaps around the new middle button
+    // match so the spacing stays visually even.
+    let gaps = null;
+    try {
+      if (draft) {
+        const ours = button.getBoundingClientRect();
+        const draftRect = draft.getBoundingClientRect();
+        const submitRect = submit.getBoundingClientRect();
+        if (ours.width && draftRect.width && submitRect.width) {
+          const delta = (ours.left - draftRect.right) - (submitRect.left - ours.right);
+          if (delta > 0.5) {
+            const current = parseFloat(getComputedStyle(button).marginRight) || 0;
+            button.style.setProperty("margin-right", `${current + delta}px`, "important");
+          } else if (delta < -0.5) {
+            const current = parseFloat(getComputedStyle(button).marginLeft) || 0;
+            button.style.setProperty("margin-left", `${current - delta}px`, "important");
+          }
+          const after = button.getBoundingClientRect();
+          const submitAfter = submit.getBoundingClientRect();
+          gaps = { left: Math.round(after.left - draftRect.right), right: Math.round(submitAfter.left - after.right) };
+        }
+      }
+    } catch (_) {}
+    const parentStyle = submit.parentElement ? getComputedStyle(submit.parentElement) : null;
+    console.info(`[ReVint] ${t("logSellActions")}`, {
+      draft: clean(draft?.textContent),
+      submit: clean(submit.textContent),
+      display: parentStyle?.display,
+      gap: parentStyle?.gap,
+      draftMarginRight: draft ? getComputedStyle(draft).marginRight : "",
+      submitMarginLeft: getComputedStyle(submit).marginLeft,
+      gaps
+    });
+  }
+
+  async function uploadAndDelete(button) {
+    const original = readOriginal();
+    const { submit } = findFormActionButtons();
+    if (!original?.id || !submit) {
+      console.warn(`[ReVint] ${t("logNoOriginal")}`);
+      return;
+    }
+    try {
+      sessionStorage.setItem(STORAGE_PENDING_DELETE, JSON.stringify({ ...original, at: Date.now() }));
+    } catch (_) {}
+    button.disabled = true;
+    setButtonLabel(button, t("publishDeleteWorking"));
+    robustClick(submit);
+    await wait(15000);
+    if (document.body.contains(button)) {
+      try { sessionStorage.removeItem(STORAGE_PENDING_DELETE); } catch (_) {}
+      button.disabled = false;
+      setButtonLabel(button, t("publishDelete"));
     }
   }
 
@@ -1077,10 +1365,25 @@
     return null;
   }
 
+  // Matchers are intentionally multilingual: the sell form labels come from
+  // Vinted in the marketplace language, while t(...) only knows the few UI
+  // languages ReVint ships. Test-ids are tried first and are language-neutral.
+  const FIELD_LABELS = {
+    category: ["kategorie", "category", "categoría", "catégorie", "categoria", "categorie", "kategoria", "κατηγορία", "kategória", "kategorija", "категория"],
+    condition: ["zustand", "condition", "estado", "état", "stato", "condizione", "staat", "conditie", "stan", "kunto", "skick", "stav", "állapot", "stare", "seisukord", "būklė", "stāvoklis", "starea", "stanje", "κατάσταση", "състояние"],
+    brand: ["marke", "brand", "marca", "marque", "merk", "brend", "znamka", "märke", "mærke", "brändi", "μάρκα", "марка"],
+    color: ["farbe", "colour", "color", "kleur", "couleur", "colore", "kolor", "värv", "krāsa", "spalva", "culoare", "barva", "färg", "farve", "väri", "χρώμα", "цвят"],
+    platform: ["plattform", "platform", "plataforma", "plateforme", "piattaforma", "platforma", "platvorm", "platformă", "πλατφόρμα", "платформа"],
+    size: ["größe", "groesse", "size", "talla", "taille", "taglia", "maat", "rozmiar", "suurus", "izmērs", "dydis", "mărime", "velikost", "storlek", "størrelse", "koko", "μέγεθος", "размер"],
+    rating: ["altersbeschränkung", "age rating", "clasificación", "classification", "classificazione", "leeftijdsclassificatie", "klasyfikacja", "vanusepiirang", "vecuma ierobežojums", "amžiaus reitingas", "clasificare", "starostna omejitev", "åldersgräns", "aldersgrænse", "ikäraja", "ηλικιακή διαβάθμιση", "възрастова оценка"],
+    material: ["material"]
+  };
+
   function dropdownOpener(label, testidHints, avoidWords) {
     const direct = firstBySelectors(testidHints || []);
     if (direct) return direct;
-    const needle = matchText(label);
+    const needles = (Array.isArray(label) ? label : [label]).map(matchText).filter(Boolean);
+    if (!needles.length) return null;
     let best = null;
     let bestPenalty = 9;
     let bestKids = Infinity;
@@ -1090,7 +1393,8 @@
       if (element.closest("a[href], header, nav, [role='navigation'], [role='tablist'], [role='tab'], .revint-panel")) continue;
       if (element.querySelector("input, textarea")) continue;
       const text = matchText(element.textContent || element.getAttribute("placeholder") || element.value || "");
-      if (text !== needle && !(text.includes(needle) && text.length <= needle.length + 14)) continue;
+      const matched = needles.some((needle) => text === needle || (text.includes(needle) && text.length <= needle.length + 14));
+      if (!matched) continue;
       const context = matchText((element.closest("fieldset, section, [class*='Cell'], [class*='ield'], [class*='ow']") || element.parentElement || element).textContent || "");
       const penalty = avoidWords?.some((word) => context.includes(word)) ? 1 : 0;
       const kids = element.getElementsByTagName("*").length;
@@ -1104,8 +1408,18 @@
     return best;
   }
 
+  async function waitForDropdownOpener(label, testidHints, avoidWords, timeout = 4000) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const opener = dropdownOpener(label, testidHints, avoidWords);
+      if (opener) return opener;
+      if (Date.now() >= deadline) return null;
+      await wait(150);
+    }
+  }
+
   function categoryOpener() {
-    return dropdownOpener("kategorie", [
+    return dropdownOpener(FIELD_LABELS.category, [
       "[data-testid='catalog-select-dropdown-input']",
       "[data-testid='catalog-select-dropdown-chevron']",
       "[data-testid='catalog-select-dropdown']"
@@ -1302,7 +1616,7 @@
   async function fillVintedDropdown(label, testidHints, candidates, logName, status = () => {}, avoidWords) {
     const values = (candidates || []).filter(Boolean);
     if (!values.length) return false;
-    const opener = dropdownOpener(label, testidHints, avoidWords);
+    const opener = await waitForDropdownOpener(label, testidHints, avoidWords);
     if (!opener) {
       console.warn(`[ReVint] ${t("logFieldNotFound", { name: logName })}`);
       return false;
@@ -1351,21 +1665,24 @@
     for (const name of [code, alternate]) {
       selectors.push(
         `[name="${name}"]`,
+        `[name="item[${name}]"]`,
         `#${name}`,
         `[data-testid='category-${name}-single-list-input']`,
         `[data-testid='category-${name}-single-list_search-input']`,
         `[data-testid='category-${name}-multi-list-input']`,
         `[data-testid='${name}-select-dropdown-input']`,
-        `[data-testid='${name}-select-dropdown-chevron']`
+        `[data-testid='${name}-select-dropdown-chevron']`,
+        `[data-testid='${name}-select-dropdown']`,
+        `[data-testid='${name}-select']`
       );
     }
     return selectors;
   }
 
-  async function fillAttribute(code, label, candidates, status, avoidWords) {
+  async function fillAttribute(code, labels, candidates, status, avoidWords, logName) {
     const values = (candidates || []).filter(Boolean);
     if (!values.length) return false;
-    return fillVintedDropdown(label, attributeSelectors(code), values, label, status, avoidWords);
+    return fillVintedDropdown(labels, attributeSelectors(code), values, logName || labels[0], status, avoidWords);
   }
 
   function sizeCandidates(value) {
@@ -1389,7 +1706,7 @@
         filled = true;
         continue;
       }
-      if (await fillAttribute("video_game_platform", t("notePlatform"), [name], status)) filled = true;
+      if (await fillAttribute("video_game_platform", FIELD_LABELS.platform, [name], status, undefined, t("notePlatform"))) filled = true;
     }
     return filled;
   }
@@ -1397,7 +1714,7 @@
   async function fillBrand(item, status = () => {}) {
     const brand = clean(item?.brand);
     if (!brand) return false;
-    const opener = dropdownOpener(t("noteBrand"), ["[data-testid='brand-select-dropdown-input']", "[name='brand']"]);
+    const opener = await waitForDropdownOpener(FIELD_LABELS.brand, ["[data-testid='brand-select-dropdown-input']", "[name='brand']"]);
     if (!opener) return false;
     const isInput = opener instanceof HTMLInputElement || opener instanceof HTMLTextAreaElement;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -1463,7 +1780,7 @@
   async function fillColor(item, status = () => {}) {
     const colors = [...new Set((item?.colors || []).filter(Boolean))].slice(0, 2);
     if (!colors.length) return false;
-    const opener = dropdownOpener(t("noteColor"), attributeSelectors("color"));
+    const opener = await waitForDropdownOpener(FIELD_LABELS.color, attributeSelectors("color"));
     if (!opener) {
       console.warn(`[ReVint] ${t("logNoColorField")}`);
       return false;
@@ -1602,7 +1919,7 @@
     step();
     const categories = await fillCategory(item);
     step();
-    const condition = await fillVintedDropdown("zustand", [
+    const condition = await fillVintedDropdown(FIELD_LABELS.condition, [
       "[data-testid='condition-select-dropdown-input']",
       "[data-testid='condition-select-dropdown-chevron']",
       "[data-testid='status-select-dropdown-input']"
@@ -1610,16 +1927,16 @@
     step();
     const platforms = await fillPlatforms(item, status);
     step();
-    const size = await fillAttribute("size", t("noteSize"), sizeCandidates(item.size), status,
-      ["versand", "paket", "pushen", "schneller", "sichtbarkeit", "spotlight"]);
+    const size = await fillAttribute("size", FIELD_LABELS.size, sizeCandidates(item.size), status,
+      ["versand", "paket", "pushen", "schneller", "sichtbarkeit", "spotlight", "shipping", "parcel", "bump", "faster", "visibility"], t("noteSize"));
     step();
-    const ageRating = await fillAttribute("video_game_ratings", t("noteRating"), [item.ageRating], status);
+    const ageRating = await fillAttribute("video_game_ratings", FIELD_LABELS.rating, [item.ageRating], status, undefined, t("noteRating"));
     step();
     const brand = await fillBrand(item, status);
     step();
     const colors = await fillColor(item, status);
     step();
-    const material = await fillAttribute("material", t("noteMaterial"), materialCandidates(item.material), status);
+    const material = await fillAttribute("material", FIELD_LABELS.material, materialCandidates(item.material), status, undefined, t("noteMaterial"));
     step();
     const isbn = await setTextWhenReady(["isbn"], item.isbn);
     if (isbn) filled++;
@@ -1654,14 +1971,39 @@
   }
 
   let loadedLogged = false;
+  let newFormDebugLogged = false;
+  function logNewFormDebug() {
+    if (newFormDebugLogged) return;
+    newFormDebugLogged = true;
+    setTimeout(() => {
+      try {
+        const buttons = [...document.querySelectorAll("button, [role='button'], a[href]")]
+          .filter(isInteractable)
+          .map((button) => `${clean(button.textContent).slice(0, 24)}|${button.getAttribute("data-testid") || ""}`);
+        console.info("[ReVint] new-form debug", {
+          host: location.hostname,
+          language: detectedLanguage,
+          publishLabel: MESSAGES.publishDelete,
+          original: readOriginal(),
+          hasButton: !!document.querySelector(".revint-publish-delete"),
+          labels: formLabels(),
+          buttons: buttons.slice(0, 40)
+        });
+      } catch (_) {}
+    }, 3000);
+  }
+
   async function run() {
     if (!messagesReady) await loadMessages();
     if (!loadedLogged) {
       loadedLogged = true;
-      console.info(`[ReVint] ${t("logLoaded", { version: chrome.runtime?.getManifest?.().version || "?" })}`);
+      console.info(`[ReVint] ${t("logLoaded", { version: chrome.runtime?.getManifest?.().version || "?" })}`, { language: detectedLanguage, host: location.hostname });
     }
+    consumePendingDelete();
     if (location.pathname.startsWith("/items/new")) {
       addPanel("new");
+      addPublishDeleteButton();
+      logNewFormDebug();
     } else if (location.pathname.startsWith("/member")) {
       addPanel("member");
       addSaveButtons();

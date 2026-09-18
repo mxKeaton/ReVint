@@ -89,12 +89,12 @@ const MAX_FETCH_ATTEMPTS = 4;
 let requestChain = Promise.resolve();
 let lastRequestAt = 0;
 
-function throttledFetch(url) {
+function throttledFetch(url, options) {
   const result = requestChain.then(async () => {
     const gap = MIN_REQUEST_GAP - (Date.now() - lastRequestAt);
     if (gap > 0) await new Promise((resolve) => setTimeout(resolve, gap));
     lastRequestAt = Date.now();
-    return fetch(url, { credentials: "include" });
+    return fetch(url, { credentials: "include", ...options });
   });
   requestChain = result.then(() => {}, () => {});
   return result;
@@ -106,20 +106,62 @@ function retryDelay(attempt, response) {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-async function fetchWithCredentials(url, attempt = 1) {
+async function fetchWithCredentials(url, attempt = 1, options) {
   let response;
   try {
-    response = await throttledFetch(url);
+    response = await throttledFetch(url, options);
   } catch (error) {
     if (attempt < MAX_FETCH_ATTEMPTS) {
       await retryDelay(attempt);
-      return fetchWithCredentials(url, attempt + 1);
+      return fetchWithCredentials(url, attempt + 1, options);
     }
     throw error;
   }
   if ((response.status === 429 || response.status >= 500) && attempt < MAX_FETCH_ATTEMPTS) {
     await retryDelay(attempt, response);
-    return fetchWithCredentials(url, attempt + 1);
+    return fetchWithCredentials(url, attempt + 1, options);
+  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response;
+}
+
+const IMAGE_CONCURRENCY = 4;
+let activeImages = 0;
+const imageWaiters = [];
+
+function withImageSlot(task) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      activeImages++;
+      const release = () => {
+        activeImages--;
+        const next = imageWaiters.shift();
+        if (next) next();
+      };
+      task().then(
+        (value) => { release(); resolve(value); },
+        (error) => { release(); reject(error); }
+      );
+    };
+    if (activeImages < IMAGE_CONCURRENCY) run();
+    else imageWaiters.push(run);
+  });
+}
+
+async function fetchImage(url, attempt = 1) {
+  let response;
+  try {
+    response = await fetch(url, { credentials: "include" });
+  } catch (error) {
+    if (attempt < MAX_FETCH_ATTEMPTS) {
+      await retryDelay(attempt);
+      return fetchImage(url, attempt + 1);
+    }
+    throw error;
+  }
+  if ((response.status === 429 || response.status >= 500) && attempt < MAX_FETCH_ATTEMPTS) {
+    await retryDelay(attempt, response);
+    return fetchImage(url, attempt + 1);
   }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response;
@@ -140,11 +182,24 @@ const handlers = {
   },
 
   "fetch-image": async ({ url }) => {
-    const response = await fetchWithCredentials(url);
+    const response = await withImageSlot(() => fetchImage(url));
     const blob = await response.blob();
     if (blob.size > MAX_IMAGE_BYTES) throw new Error("Image is larger than 15 MB");
     const bytes = new Uint8Array(await blob.arrayBuffer());
     return { image: { data: toBase64(bytes), type: blob.type || "image/jpeg" } };
+  },
+
+  "delete-item": async ({ url, csrfToken }) => {
+    const response = await fetchWithCredentials(url, 1, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Platform": "web",
+        "X-CSRF-Token": csrfToken,
+        "X-Next-App": "marketplace-web"
+      }
+    });
+    return { status: response.status };
   },
 
   "open-tab": async ({ url, active }) => {

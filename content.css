@@ -111,6 +111,11 @@
 
 .revint-inline { margin-top: 12px; }
 
+.revint-publish-delete {
+  cursor: pointer;
+}
+.revint-publish-delete:disabled { cursor: not-allowed; opacity: .6; }
+
 .revint-panel--home {
   max-width: 300px;
   width: auto;
