@@ -585,6 +585,9 @@
       mode === "member"
         ? `<button type="button" class="revint-button revint-export-all">${t("saveAll")}</button><button type="button" class="revint-button revint-export-active">${t("saveListed")}</button>`
         : `<button type="button" class="revint-button revint-manual-button">${t("manual")}</button><input type="file" accept=".json,.revint.json,application/json" hidden>`,
+      '</div>',
+      '<div class="revint-import-view" hidden>',
+      '<div class="revint-progress revint-progress--import"><div class="revint-progress-bar"></div></div>',
       '</div>'
     ].join("");
 
@@ -599,7 +602,34 @@
     const progressBar = panel.querySelector(".revint-progress-bar");
     const progressLabel = panel.querySelector(".revint-progress-label");
     const busyNote = panel.querySelector(".revint-busy-note");
+    const importView = panel.querySelector(".revint-import-view");
+    const importTrack = panel.querySelector(".revint-progress--import");
+    const importBar = panel.querySelector(".revint-progress--import .revint-progress-bar");
     const report = (text) => console.info(`[ReVint] ${text}`);
+
+    let wasCollapsed = true;
+    panel.showProgress = () => {
+      wasCollapsed = panel.classList.contains("revint-collapsed");
+      panel.classList.add("revint-collapsed");
+      const collapsedWidth = Math.round(panel.getBoundingClientRect().width);
+      panel.classList.add("revint-importing");
+      if (collapsedWidth) panel.style.width = `${collapsedWidth}px`;
+      importView.hidden = false;
+      importView.style.display = "flex";
+      importTrack.style.display = "block";
+      importBar.style.width = "0%";
+    };
+    panel.setProgress = (done, total) => {
+      importBar.style.width = `${Math.min(100, Math.round((done / total) * 100))}%`;
+    };
+    panel.hideProgress = () => {
+      panel.classList.remove("revint-importing");
+      panel.style.width = "";
+      importView.hidden = true;
+      importView.style.display = "";
+      importTrack.style.display = "";
+      if (!wasCollapsed) panel.classList.remove("revint-collapsed");
+    };
 
     const progress = {
       start(total) {
@@ -655,10 +685,14 @@
         console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
         return;
       }
+      panel.showProgress();
       try {
-        await fillForm(JSON.parse(loaded.text), report);
+        await fillForm(JSON.parse(loaded.text), report, (done, total) => panel.setProgress(done, total));
       } catch (error) {
         console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
+      } finally {
+        panel.hideProgress();
+        await refresh();
       }
     };
 
@@ -809,11 +843,14 @@
       const input = panel.querySelector("input[type=file]");
       manualButton.addEventListener("click", () => input.click());
       input.addEventListener("change", async () => {
+        panel.showProgress();
         try {
           const bundle = JSON.parse(await input.files[0].text());
-          await fillForm(bundle, report);
+          await fillForm(bundle, report, (done, total) => panel.setProgress(done, total));
         } catch (error) {
           console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
+        } finally {
+          panel.hideProgress();
         }
         input.value = "";
       });
@@ -1404,14 +1441,32 @@
     return new File([bytes], image.name, { type: image.type });
   }
 
-  async function fillForm(bundle, status) {
+  async function fillForm(bundle, status, progress = () => {}) {
     if (bundle?.format !== FORMAT || bundle?.version !== VERSION || !bundle.item) throw new Error(t("errInvalidFile"));
     const item = bundle.item;
     console.info(`[ReVint] ${t("logImportData")}`, item);
+    const total =
+      3 +
+      1 +
+      1 +
+      (item.platforms?.length ? 1 : 0) +
+      (item.size ? 1 : 0) +
+      (item.ageRating ? 1 : 0) +
+      (item.brand ? 1 : 0) +
+      (item.colors?.length ? 1 : 0) +
+      (item.material ? 1 : 0) +
+      (item.isbn ? 1 : 0) +
+      (item.price ? 1 : 0);
+    let done = 0;
+    const step = () => progress(++done, total);
+
     let filled = 0;
+    step();
     if (await setTextWhenReady(["titel", "title"], item.title, 8000)) filled++;
+    step();
     if (await setTextWhenReady(["beschreibung", "description"], item.description, 8000)) filled++;
 
+    step();
     const fileInput = await waitForFileInput();
     if (fileInput && item.images?.length) {
       const transfer = new DataTransfer();
@@ -1423,21 +1478,31 @@
     } else if (!item.images?.length) console.error(`[ReVint] ${t("logNoImages")}`);
     else console.error(`[ReVint] ${t("logNoFileInput")}`);
 
+    step();
     const categories = await fillCategory(item);
+    step();
     const condition = await fillVintedDropdown("zustand", [
       "[data-testid='condition-select-dropdown-input']",
       "[data-testid='condition-select-dropdown-chevron']",
       "[data-testid='status-select-dropdown-input']"
     ], conditionCandidates(item.condition), t("noteCondition"), status);
+    step();
     const platforms = await fillPlatforms(item, status);
+    step();
     const size = await fillAttribute("size", t("noteSize"), sizeCandidates(item.size), status,
       ["versand", "paket", "pushen", "schneller", "sichtbarkeit", "spotlight"]);
+    step();
     const ageRating = await fillAttribute("video_game_ratings", t("noteRating"), [item.ageRating], status);
+    step();
     const brand = await fillBrand(item, status);
+    step();
     const colors = await fillColor(item, status);
+    step();
     const material = await fillAttribute("material", t("noteMaterial"), materialCandidates(item.material), status);
+    step();
     const isbn = await setTextWhenReady(["isbn"], item.isbn);
     if (isbn) filled++;
+    step();
     const price = await setPrice(item.price);
     if (price) filled++;
     const note = (key, ok) => t(ok ? key : "noteManual", { name: t(key) });
