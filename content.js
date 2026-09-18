@@ -8,6 +8,7 @@
   const BATCH_DELAY = 1200;
 
   let revintBusy = false;
+  let contextInvalidated = false;
   window.addEventListener("beforeunload", (event) => {
     if (!revintBusy) return;
     event.preventDefault();
@@ -22,7 +23,7 @@
     .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  const norm = (value) => clean(value).toLocaleLowerCase("de-DE");
+  const norm = (value) => clean(value).toLowerCase();
 
   const TLD_LANGUAGE = {
     com: "en", uk: "en", ie: "en", de: "de", at: "de",
@@ -34,6 +35,7 @@
 
   let MESSAGES = {};
   let messagesReady = false;
+  let messagesLoading = null;
 
   function languageFromHostname(hostname) {
     const host = String(hostname || "").replace(/^www\./, "");
@@ -51,36 +53,60 @@
     return response.json();
   }
 
-  async function loadMessages() {
-    let english = {};
-    try { english = await fetchMessages("en"); } catch (_) {}
-    const code = await detectLanguage();
-    let chosen = english;
-    if (code && code !== "en") {
-      try { chosen = await fetchMessages(code); } catch (_) { chosen = english; }
+  function loadMessages() {
+    if (!messagesLoading) {
+      messagesLoading = (async () => {
+        let english = {};
+        try { english = await fetchMessages("en"); } catch (_) {}
+        const code = await detectLanguage();
+        let chosen = english;
+        if (code && code !== "en") {
+          try { chosen = await fetchMessages(code); } catch (_) { chosen = english; }
+        }
+        MESSAGES = { ...english, ...chosen };
+        messagesReady = true;
+      })();
     }
-    MESSAGES = { ...english, ...chosen };
-    messagesReady = true;
+    return messagesLoading;
   }
 
   function t(key, params) {
     let text = MESSAGES[key] || key;
     if (params) {
       for (const [name, value] of Object.entries(params)) {
-        text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value));
+        text = text.split(`{${name}}`).join(String(value));
       }
+    }
+    return text;
+  }
+
+  function noteContextError(error) {
+    const text = String(error?.message || error || "");
+    if (!contextInvalidated && /extension context invalidated/i.test(text)) {
+      contextInvalidated = true;
+      revintBusy = false;
+      console.warn(`[ReVint] ${t("logContextInvalidated")}`);
     }
     return text;
   }
 
   function message(payload) {
     return new Promise((resolve) => {
+      if (contextInvalidated) {
+        resolve({ ok: false, error: t("logContextInvalidated") });
+        return;
+      }
       try {
         chrome.runtime.sendMessage(payload, (response) => {
-          resolve(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : response);
+          try {
+            if (chrome.runtime.lastError) resolve({ ok: false, error: noteContextError(chrome.runtime.lastError) });
+            else resolve(response);
+          } catch (error) {
+            resolve({ ok: false, error: noteContextError(error) });
+          }
         });
       } catch (error) {
-        resolve({ ok: false, error: error.message });
+        resolve({ ok: false, error: noteContextError(error) });
       }
     });
   }
@@ -458,26 +484,30 @@
         progress?.update(done, items.length);
       } catch (error) {
         failed.push(item);
-        console.error(`[ReVint] ${t("logBatchFailed", { url: item.url })}`, error, error?.stack || "");
+        // When the extension is reloaded mid-run every request fails with the
+        // same "context invalidated" error; log it once instead of per item.
+        if (!contextInvalidated) console.error(`[ReVint] ${t("logBatchFailed", { url: item.url })}`, error, error?.stack || "");
       }
     };
     progress?.start(items.length);
     try {
-      for (let index = 0; index < items.length; index++) {
+      for (let index = 0; index < items.length && !contextInvalidated; index++) {
         await exportOne(items[index]);
         if (index < items.length - 1) await wait(BATCH_DELAY);
       }
-      if (failed.length) {
+      if (failed.length && !contextInvalidated) {
         const retry = failed.splice(0, failed.length);
-        for (let index = 0; index < retry.length; index++) {
+        for (let index = 0; index < retry.length && !contextInvalidated; index++) {
           await exportOne(retry[index]);
           await wait(BATCH_DELAY * 2);
         }
       }
-      console.info(`[ReVint] ${t("logSummary", { done: succeeded, total: items.length, extra: failed.length ? t("logSavedExtra", { count: failed.length }) : "" })}`);
-      await wait(1500);
+      if (!contextInvalidated) {
+        console.info(`[ReVint] ${t("logSummary", { done: succeeded, total: items.length, extra: failed.length ? t("logSavedExtra", { count: failed.length }) : "" })}`);
+        await wait(1500);
+      }
     } finally {
-      progress?.finish();
+      progress?.finish(contextInvalidated ? t("contextInvalidated") : "");
     }
   }
 
@@ -508,23 +538,32 @@
   }
 
   async function enqueueAutoImport(name) {
-    const stored = await chrome.storage.local.get("revintPendingQueue");
-    const queue = stored.revintPendingQueue || [];
-    queue.push({ name, at: Date.now() });
-    await chrome.storage.local.set({ revintPendingQueue: queue });
+    try {
+      const stored = await chrome.storage.local.get("revintPendingQueue");
+      const queue = stored.revintPendingQueue || [];
+      queue.push({ name, at: Date.now() });
+      await chrome.storage.local.set({ revintPendingQueue: queue });
+    } catch (error) {
+      noteContextError(error);
+    }
   }
 
   async function consumeAutoImport() {
-    const stored = await chrome.storage.local.get("revintPendingQueue");
-    const queue = stored.revintPendingQueue || [];
-    let pending = "";
-    while (queue.length) {
-      const entry = queue.shift();
-      if (entry && Date.now() - entry.at < 120000) { pending = entry.name; break; }
+    try {
+      const stored = await chrome.storage.local.get("revintPendingQueue");
+      const queue = stored.revintPendingQueue || [];
+      let pending = "";
+      while (queue.length) {
+        const entry = queue.shift();
+        if (entry && Date.now() - entry.at < 120000) { pending = entry.name; break; }
+      }
+      if (queue.length) await chrome.storage.local.set({ revintPendingQueue: queue });
+      else await chrome.storage.local.remove("revintPendingQueue");
+      return pending;
+    } catch (error) {
+      noteContextError(error);
+      return "";
     }
-    if (queue.length) await chrome.storage.local.set({ revintPendingQueue: queue });
-    else await chrome.storage.local.remove("revintPendingQueue");
-    return pending;
   }
 
   function addPanel(mode) {
@@ -540,7 +579,7 @@
       home.innerHTML = [
         '<div class="revint-panel-head">',
         '<div class="revint-panel-title">ReVint</div>',
-        '<button type="button" class="revint-collapse-button" aria-label="Panel ein-/ausklappen">▾</button>',
+        `<button type="button" class="revint-collapse-button" aria-label="${t("togglePanel")}">▾</button>`,
         '</div>',
         '<div class="revint-body revint-home-body">',
         `<div class="revint-home-hint">${t("homeHint")} <button type="button" class="revint-home-button">${t("homeButton")}</button></div>`,
@@ -563,7 +602,7 @@
     panel.innerHTML = [
       '<div class="revint-panel-head">',
       '<div class="revint-panel-title">ReVint</div>',
-      '<button type="button" class="revint-collapse-button" aria-label="Panel ein-/ausklappen">▾</button>',
+      `<button type="button" class="revint-collapse-button" aria-label="${t("togglePanel")}">▾</button>`,
       '</div>',
       '<div class="revint-body">',
       '<div class="revint-toolbar">',
@@ -635,6 +674,7 @@
       start(total) {
         revintBusy = true;
         panel.classList.add("revint-busy");
+        busyNote.textContent = t("busy");
         busyNote.hidden = false;
         progressBar.style.width = "0%";
         progressLabel.textContent = `0/${total}`;
@@ -643,10 +683,16 @@
         progressBar.style.width = `${Math.min(100, Math.round((done / total) * 100))}%`;
         progressLabel.textContent = `${Math.min(done, total)}/${total}`;
       },
-      finish() {
+      finish(notice) {
         revintBusy = false;
         panel.classList.remove("revint-busy");
-        busyNote.hidden = true;
+        if (notice) {
+          busyNote.textContent = notice;
+          busyNote.hidden = false;
+        } else {
+          busyNote.textContent = t("busy");
+          busyNote.hidden = true;
+        }
         progressBar.style.width = "0%";
         progressLabel.textContent = "";
       }
@@ -682,7 +728,7 @@
     const importFileByName = async (name) => {
       const loaded = await message({ type: "read-file", name });
       if (!loaded?.ok) {
-        console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
+        if (!contextInvalidated) console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
         return;
       }
       panel.showProgress();
@@ -756,7 +802,7 @@
     const refresh = async () => {
       const response = await message({ type: "list-files" });
       if (!response?.ok) {
-        console.error(`[ReVint] ${t("logListFailed")}`, response?.error);
+        if (!contextInvalidated) console.error(`[ReVint] ${t("logListFailed")}`, response?.error);
         render();
         return;
       }
@@ -782,7 +828,7 @@
       openButton.disabled = true;
       progress.start(names.length);
       try {
-        for (let index = 0; index < names.length; index++) {
+        for (let index = 0; index < names.length && !contextInvalidated; index++) {
           openButton.textContent = t("opening", { done: index + 1, total: names.length });
           await enqueueAutoImport(names[index]);
           await message({ type: "open-tab", url: newItemUrl(), active: false });
@@ -790,9 +836,9 @@
           if (index < names.length - 1) await wait(OPEN_DELAY);
         }
       } catch (error) {
-        console.error(`[ReVint] ${t("logOpenFailed")}`, error, error?.stack || "");
+        if (!contextInvalidated) console.error(`[ReVint] ${t("logOpenFailed")}`, error, error?.stack || "");
       } finally {
-        progress.finish();
+        progress.finish(contextInvalidated ? t("contextInvalidated") : "");
         openButton.textContent = original;
         updateSelectionState();
       }
@@ -871,10 +917,10 @@
   }
 
   function addSaveButtons() {
-    const buttons = [...document.querySelectorAll("button, a")].filter((el) =>
-      el.matches?.('button[data-testid="bump-button"]') || /^(pushen|push|artikel pushen)$/i.test(clean(el.textContent))
-    );
-    for (const push of buttons) {
+    const candidates = document.querySelectorAll("button:not([data-revint-scanned]), a:not([data-revint-scanned])");
+    for (const push of candidates) {
+      push.dataset.revintScanned = "1";
+      if (!(push.matches?.('button[data-testid="bump-button"]') || /^(pushen|push|artikel pushen)$/i.test(clean(push.textContent)))) continue;
       const container = push.parentElement;
       if (!container || container.querySelector(":scope > .revint-button")) continue;
       const button = document.createElement("button");
@@ -941,7 +987,7 @@
   }
 
   const matchText = (value) => String(value == null ? "" : value)
-    .toLocaleLowerCase("de-DE")
+    .toLowerCase()
     .replace(/[^a-z0-9äöüß]+/g, " ")
     .trim();
 
@@ -1262,7 +1308,7 @@
     for (const name of names) {
       const direct = exactRowMatch(document.body, name);
       if (direct) {
-        status(`Plattform: ${name} …`);
+        status(`${t("notePlatform")}: ${name} …`);
         robustClick(direct);
         await wait(300);
         filled = true;
@@ -1293,7 +1339,7 @@
         await wait(250);
         const row = exactRowMatch(pickerContainer() || document.body, brand) || exactRowMatch(document.body, brand);
         if (!row) continue;
-        status(`Marke: ${brand} …`);
+        status(`${t("noteBrand")}: ${brand} …`);
         robustClick(row);
         await wait(300);
         const save = dropdownSaveButton();
@@ -1362,7 +1408,7 @@
       const color = remaining[0];
       const row = rowByAnyText(pickerContainer() || document.body, color) || rowByAnyText(document.body, color);
       if (!row) continue;
-      status(`Farbe: ${color} …`);
+      status(`${t("noteColor")}: ${color} …`);
       robustClick(clickableTarget(row));
       remaining.splice(0, 1);
       await wait(300);
@@ -1532,8 +1578,13 @@
     return false;
   }
 
+  let loadedLogged = false;
   async function run() {
     if (!messagesReady) await loadMessages();
+    if (!loadedLogged) {
+      loadedLogged = true;
+      console.info(`[ReVint] ${t("logLoaded", { version: chrome.runtime?.getManifest?.().version || "?" })}`);
+    }
     if (location.pathname.startsWith("/items/new")) {
       addPanel("new");
     } else if (location.pathname.startsWith("/member")) {
@@ -1545,12 +1596,24 @@
   }
 
   let runScheduled = false;
+  let lastRunAt = 0;
   const scheduleRun = () => {
     if (runScheduled) return;
     runScheduled = true;
-    setTimeout(() => { runScheduled = false; run(); }, 50);
+    const delay = Math.max(0, 200 - (Date.now() - lastRunAt));
+    setTimeout(() => {
+      runScheduled = false;
+      lastRunAt = Date.now();
+      run();
+    }, delay);
   };
-  console.info(`[ReVint] content script geladen (v${chrome.runtime?.getManifest?.().version || "?"})`);
+  const hasElementAdditions = (mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) if (node.nodeType === 1) return true;
+    }
+    return false;
+  };
   run();
-  new MutationObserver(scheduleRun).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver((mutations) => { if (hasElementAdditions(mutations)) scheduleRun(); })
+    .observe(document.documentElement, { childList: true, subtree: true });
 })();
