@@ -623,6 +623,11 @@
     }
   }
 
+  async function consumePendingBundle() {
+    const response = await message({ type: "take-bundle" });
+    return response?.ok ? response.bundle : null;
+  }
+
   function addPanel(mode) {
     const existing = document.querySelector(".revint-panel");
     if (existing && existing.dataset.mode === mode) return;
@@ -684,6 +689,8 @@
             `<button type="button" class="revint-button revint-export-all">${t("saveAll")}</button>`,
             `<button type="button" class="revint-button revint-export-active">${t("saveListed")}</button>`,
             '</div>',
+            `<button type="button" class="revint-button revint-relist-file">${t("relistFromFile")}</button>`,
+            '<input type="file" class="revint-relist-file-input" accept=".json,.revint.json,application/json" hidden>',
             '<div class="revint-button-row">',
             `<button type="button" class="revint-button revint-export-all-manual">${t("saveAllManual")}</button>`,
             `<button type="button" class="revint-button revint-export-active-manual">${t("saveListedManual")}</button>`,
@@ -791,15 +798,9 @@
       list.appendChild(element);
     };
 
-    const importFileByName = async (name) => {
-      const loaded = await message({ type: "read-file", name });
-      if (!loaded?.ok) {
-        if (!contextInvalidated) console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
-        return;
-      }
+    const importBundle = async (bundle, name) => {
       panel.showProgress();
       try {
-        const bundle = JSON.parse(loaded.text);
         rememberOriginal(bundle, name);
         await fillForm(bundle, report, (done, total) => panel.setProgress(done, total));
       } catch (error) {
@@ -808,6 +809,15 @@
         panel.hideProgress();
         await refresh();
       }
+    };
+
+    const importFileByName = async (name) => {
+      const loaded = await message({ type: "read-file", name });
+      if (!loaded?.ok) {
+        if (!contextInvalidated) console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
+        return;
+      }
+      await importBundle(JSON.parse(loaded.text), name);
     };
 
     const openItem = (name) => {
@@ -975,6 +985,24 @@
       };
       allManualButton.addEventListener("click", () => runManualExport(false));
       activeManualButton.addEventListener("click", () => runManualExport(true));
+
+      const relistFileButton = panel.querySelector(".revint-relist-file");
+      const relistFileInput = panel.querySelector(".revint-relist-file-input");
+      relistFileButton.addEventListener("click", () => relistFileInput.click());
+      relistFileInput.addEventListener("change", async () => {
+        const file = relistFileInput.files[0];
+        relistFileInput.value = "";
+        if (!file) return;
+        try {
+          const bundle = JSON.parse(await file.text());
+          if (bundle?.format !== FORMAT || bundle?.version !== VERSION || !bundle.item) throw new Error(t("errInvalidFile"));
+          const stored = await message({ type: "stash-bundle", bundle });
+          if (!stored?.ok) throw new Error(stored?.error || t("errSave"));
+          await message({ type: "open-tab", url: newItemUrl(), active: true });
+        } catch (error) {
+          console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
+        }
+      });
     } else {
       const manualButton = panel.querySelector(".revint-manual-button");
       const input = panel.querySelector("input[type=file]");
@@ -1003,7 +1031,10 @@
         sessionStorage.removeItem("revintPending");
         importFileByName(local);
       } else {
-        consumeAutoImport().then((pending) => { if (pending) importFileByName(pending); });
+        consumePendingBundle().then((bundle) => {
+          if (bundle) { importBundle(bundle); return; }
+          consumeAutoImport().then((pending) => { if (pending) importFileByName(pending); });
+        });
       }
     }
   }

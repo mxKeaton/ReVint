@@ -3,6 +3,7 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const DB_NAME = "revint";
 const DB_VERSION = 2;
 const STORE = "relists";
+const PENDING_BUNDLE = "__revint_pending__.json";
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -209,9 +210,28 @@ const handlers = {
 
   "list-files": async () => {
     const entries = await storeAll();
-    const files = entries.map((entry) => ({ name: entry.name, lastModified: entry.createdAt || 0 }));
+    const files = entries
+      .filter((entry) => entry.name !== PENDING_BUNDLE)
+      .map((entry) => ({ name: entry.name, lastModified: entry.createdAt || 0 }));
     files.sort((a, b) => b.lastModified - a.lastModified);
     return { files };
+  },
+
+  "stash-bundle": async ({ bundle }) => {
+    await storePut({
+      name: PENDING_BUNDLE,
+      createdAt: Date.now(),
+      sourceUrl: bundle?.item?.sourceUrl || "",
+      title: bundle?.item?.title || PENDING_BUNDLE,
+      bundle
+    });
+    return {};
+  },
+
+  "take-bundle": async () => {
+    const entry = await storeGet(PENDING_BUNDLE);
+    if (entry) await storeDelete(PENDING_BUNDLE);
+    return { bundle: entry?.bundle || null };
   },
 
   "read-file": async ({ name }) => {
