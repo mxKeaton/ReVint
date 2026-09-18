@@ -40,5 +40,7 @@
   "optionsError": "Kļūda: {message}",
   "folderNone": "mape nav izvēlēta",
   "homeHint": "Lai sāktu relistingu, dodieties uz",
-  "homeButton": "dalībnieka lapu"
+  "homeButton": "dalībnieka lapu",
+  "importWorking": "Piemēro …",
+  "importBusy": "Nepieskarieties nekam, kamēr process nav pabeigts."
 }

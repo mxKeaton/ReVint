@@ -40,5 +40,7 @@
   "optionsError": "Грешка: {message}",
   "folderNone": "няма избрана папка",
   "homeHint": "За да започнете relisting, отидете на",
-  "homeButton": "страницата на член"
+  "homeButton": "страницата на член",
+  "importWorking": "Прилагане …",
+  "importBusy": "Не пипайте нищо, докато процесът не приключи."
 }

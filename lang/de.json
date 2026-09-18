@@ -40,5 +40,7 @@
   "optionsError": "Fehler: {message}",
   "folderNone": "kein Ordner gewählt",
   "homeHint": "Um mit dem Relisten zu beginnen, wechsle zur",
-  "homeButton": "Mitgliederseite"
+  "homeButton": "Mitgliederseite",
+  "importWorking": "Wird eingefügt …",
+  "importBusy": "Bitte nichts anklicken, bis der Vorgang abgeschlossen ist."
 }

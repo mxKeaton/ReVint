@@ -40,5 +40,7 @@
   "optionsError": "Błąd: {message}",
   "folderNone": "nie wybrano folderu",
   "homeHint": "Aby rozpocząć relisting, przejdź do",
-  "homeButton": "strony członka"
+  "homeButton": "strony członka",
+  "importWorking": "Stosowanie …",
+  "importBusy": "Nie klikaj nic, dopóki proces się nie zakończy."
 }

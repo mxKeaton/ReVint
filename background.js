@@ -94,9 +94,10 @@ async function resolveName(base, sourceUrl) {
   return `${stem}-${Date.now()}.revint.json`;
 }
 
-const MIN_REQUEST_GAP = 120;
-const MAX_CONCURRENT_REQUESTS = 4;
+const MIN_REQUEST_GAP = 150;
+const MAX_CONCURRENT_REQUESTS = 3;
 const MAX_FETCH_ATTEMPTS = 4;
+const MAX_RETRY_DELAY = 8000;
 
 let activeRequests = 0;
 let lastRequestAt = 0;
@@ -135,7 +136,7 @@ function throttledFetch(url) {
 function retryDelay(attempt, response) {
   const header = Number(response?.headers?.get?.("retry-after"));
   const delay = Number.isFinite(header) && header > 0 ? header * 1000 : 700 * attempt;
-  return new Promise((resolve) => setTimeout(resolve, delay));
+  return new Promise((resolve) => setTimeout(resolve, Math.min(delay, MAX_RETRY_DELAY)));
 }
 
 async function fetchWithCredentials(url, attempt = 1) {

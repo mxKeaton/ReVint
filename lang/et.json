@@ -40,5 +40,7 @@
   "optionsError": "Viga: {message}",
   "folderNone": "kausta pole valitud",
   "homeHint": "Relistimise alustamiseks minge",
-  "homeButton": "liikme lehele"
+  "homeButton": "liikme lehele",
+  "importWorking": "Rakendamine …",
+  "importBusy": "Ära puutu millessegi, kuni protsess on lõppenud."
 }

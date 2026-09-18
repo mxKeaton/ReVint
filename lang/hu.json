@@ -40,5 +40,7 @@
   "optionsError": "Hiba: {message}",
   "folderNone": "nincs mappa kiválasztva",
   "homeHint": "Az újralistázás megkezdéséhez menj a",
-  "homeButton": "tagoldalra"
+  "homeButton": "tagoldalra",
+  "importWorking": "Alkalmazás …",
+  "importBusy": "Ne nyúlj semmihez, amíg a folyamat be nem fejeződik."
 }

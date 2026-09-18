@@ -122,6 +122,30 @@
 }
 .revint-home-button:hover { color: #005b63; }
 
+.revint-import-view { display: none; }
+.revint-panel.revint-importing .revint-body { display: none; }
+.revint-panel.revint-importing .revint-collapse-button { display: none; }
+.revint-panel.revint-importing .revint-import-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.revint-panel.revint-importing .revint-import-view .revint-progress { display: block; }
+.revint-progress--import .revint-progress-bar {
+  animation: revint-indeterminate 1.2s ease-in-out infinite;
+  width: 40%;
+}
+@keyframes revint-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.revint-import-status {
+  color: #333;
+  font: 13px/18px Arial, sans-serif;
+  min-height: 18px;
+  text-align: center;
+}
+
 .revint-folder-row {
   align-items: center;
   display: flex;

@@ -40,5 +40,7 @@
   "optionsError": "Fel: {message}",
   "folderNone": "ingen mapp vald",
   "homeHint": "För att börja relista, gå till",
-  "homeButton": "medlemssidan"
+  "homeButton": "medlemssidan",
+  "importWorking": "Tillämpar …",
+  "importBusy": "Rör ingenting förrän processen är klar."
 }

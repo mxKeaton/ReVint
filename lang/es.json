@@ -40,5 +40,7 @@
   "optionsError": "Error: {message}",
   "folderNone": "ninguna carpeta elegida",
   "homeHint": "Para empezar a relistar, ve a la",
-  "homeButton": "página de miembro"
+  "homeButton": "página de miembro",
+  "importWorking": "Aplicando …",
+  "importBusy": "No toques nada hasta que termine el proceso."
 }
