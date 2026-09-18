@@ -298,12 +298,12 @@
   async function embedImages(urls, status) {
     const images = [];
     for (let i = 0; i < urls.length; i++) {
-      status(`Bild ${i + 1}/${urls.length} wird lokal gespeichert …`);
+      status(t("statusImage", { done: i + 1, total: urls.length }));
       const response = await message({ type: "fetch-image", url: urls[i] });
       if (response?.ok) images.push({ name: `image-${i + 1}.${extension(response.image.type)}`, ...response.image });
-      else console.error(`[ReVint] Bild ${i + 1} konnte nicht gespeichert werden:`, response?.error || "Unbekannter Fehler", urls[i]);
+      else console.error(`[ReVint] ${t("statusImageFailed", { index: i + 1 })}`, response?.error || t("statusUnknown"), urls[i]);
     }
-    if (!urls.length) console.error("[ReVint] Keine Bild-URLs in der Relisting-Seite gefunden.");
+    if (!urls.length) console.error(`[ReVint] ${t("logNoImageUrls")}`);
     return images;
   }
 
@@ -334,7 +334,7 @@
       }
       return best;
     } catch (error) {
-      console.warn("[ReVint] Kartenfindung (Fallback) fehlgeschlagen:", error);
+      console.warn(`[ReVint] ${t("logCardFindFailed")}`, error);
       return null;
     }
   }
@@ -392,21 +392,21 @@
   }
 
   async function exportCard(card, setStatus) {
-    if (!card.url) throw new Error("Relisting-Link wurde nicht gefunden");
-    setStatus("Daten werden gelesen …");
+    if (!card.url) throw new Error(t("errNoLink"));
+    setStatus(t("statusReading"));
     const page = await message({ type: "fetch-text", url: card.url });
-    if (!page?.ok) throw new Error(page?.error || "Relisting-Seite konnte nicht gelesen werden");
+    if (!page?.ok) throw new Error(page?.error || t("errPageRead"));
     const item = parseItemPage(page.text, page.url || card.url, card);
-    console.info("[ReVint] Erkannte Relisting-Daten:", item);
+    console.info(`[ReVint] ${t("logParsed")}`, item);
     item.images = await embedImages(item.imageUrls, setStatus);
     delete item.imageUrls;
     const bundle = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), item };
-    const safeTitle = (item.title || "artikel").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
+    const safeTitle = (item.title || "relisting").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
     const filename = `${safeTitle}.revint.json`;
     const contents = JSON.stringify(bundle);
 
     const saved = await message({ type: "save-file", filename, contents, sourceUrl: item.sourceUrl || card.url });
-    if (!saved?.ok) throw new Error(saved?.error || "Speichern fehlgeschlagen");
+    if (!saved?.ok) throw new Error(saved?.error || t("errSave"));
   }
 
   async function exportItem(button) {
@@ -417,11 +417,11 @@
       const card = cardData(button);
       await exportCard(card, setStatus);
       document.querySelector(".revint-panel")?.refresh?.();
-      setStatus("Gespeichert ✓");
+      setStatus(t("statusSaved"));
       await wait(1500);
     } catch (error) {
-      console.error("[ReVint] Export fehlgeschlagen:", error, error?.stack || "");
-      setStatus(`Fehler: ${error.message}`);
+      console.error(`[ReVint] ${t("logExportFailed")}`, error, error?.stack || "");
+      setStatus(t("statusError", { message: error.message }));
       await wait(3500);
     } finally {
       button.disabled = false;
@@ -444,7 +444,7 @@
     const allItems = listedMemberItems();
     const items = activeOnly ? allItems.filter((item) => !inactive.test(item.stateText)) : allItems;
     if (!items.length) {
-      console.error("[ReVint] Keine passenden Relistings auf der aktuell geladenen Seite gefunden.");
+      console.error(`[ReVint] ${t("logNoItems")}`);
       return;
     }
     let succeeded = 0;
@@ -458,7 +458,7 @@
         progress?.update(done, items.length);
       } catch (error) {
         failed.push(item);
-        console.error(`[ReVint] Batch-Export fehlgeschlagen (${item.url}):`, error, error?.stack || "");
+        console.error(`[ReVint] ${t("logBatchFailed", { url: item.url })}`, error, error?.stack || "");
       }
     };
     progress?.start(items.length);
@@ -474,7 +474,7 @@
           await wait(BATCH_DELAY * 2);
         }
       }
-      console.info(`[ReVint] ${succeeded}/${items.length} gespeichert${failed.length ? `, ${failed.length} fehlgeschlagen` : ""}.`);
+      console.info(`[ReVint] ${t("logSummary", { done: succeeded, total: items.length, extra: failed.length ? t("logSavedExtra", { count: failed.length }) : "" })}`);
       await wait(1500);
     } finally {
       progress?.finish();
@@ -504,7 +504,7 @@
       }
     }
     if (url) location.assign(url);
-    else console.warn("[ReVint] Mitgliederseite wurde nicht gefunden.");
+    else console.warn(`[ReVint] ${t("logNoMember")}`);
   }
 
   async function enqueueAutoImport(name) {
@@ -652,13 +652,13 @@
     const importFileByName = async (name) => {
       const loaded = await message({ type: "read-file", name });
       if (!loaded?.ok) {
-        console.error("[ReVint] Datei konnte nicht gelesen werden:", loaded?.error);
+        console.error(`[ReVint] ${t("logFileReadFailed")}`, loaded?.error);
         return;
       }
       try {
         await fillForm(JSON.parse(loaded.text), report);
       } catch (error) {
-        console.error("[ReVint] Import fehlgeschlagen:", error, error?.stack || "");
+        console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
       }
     };
 
@@ -722,7 +722,7 @@
     const refresh = async () => {
       const response = await message({ type: "list-files" });
       if (!response?.ok) {
-        console.error("[ReVint] Relistings konnten nicht gelesen werden:", response?.error);
+        console.error(`[ReVint] ${t("logListFailed")}`, response?.error);
         render();
         return;
       }
@@ -756,7 +756,7 @@
           if (index < names.length - 1) await wait(OPEN_DELAY);
         }
       } catch (error) {
-        console.error("[ReVint] Öffnen fehlgeschlagen:", error, error?.stack || "");
+        console.error(`[ReVint] ${t("logOpenFailed")}`, error, error?.stack || "");
       } finally {
         progress.finish();
         openButton.textContent = original;
@@ -813,7 +813,7 @@
           const bundle = JSON.parse(await input.files[0].text());
           await fillForm(bundle, report);
         } catch (error) {
-          console.error("[ReVint] Import fehlgeschlagen:", error, error?.stack || "");
+          console.error(`[ReVint] ${t("logImportFailed")}`, error, error?.stack || "");
         }
         input.value = "";
       });
@@ -1050,7 +1050,7 @@
     if (!pickerContainer()) {
       const opener = categoryOpener();
       if (!opener) {
-        console.warn("[ReVint] Kategorie-Feld wurde nicht gefunden.");
+        console.warn(`[ReVint] ${t("logNoCategoryField")}`);
         return 0;
       }
       for (let attempt = 0; attempt < 16 && !pickerContainer(); attempt++) {
@@ -1061,20 +1061,20 @@
       }
     }
     if (!pickerContainer()) {
-      console.warn("[ReVint] Kategorie-Auswahl ließ sich nicht öffnen.");
+      console.warn(`[ReVint] ${t("logNoCategoryPicker")}`);
       return 0;
     }
 
     let filled = 0;
     for (let index = 0; index < path.length; index++) {
       if (!location.pathname.startsWith("/items/new")) {
-        console.warn("[ReVint] Formular wurde verlassen, Kategorie abgebrochen.");
+        console.warn(`[ReVint] ${t("logLeftForm")}`);
         break;
       }
       const segment = path[index];
-      status(`Kategorie ${index + 1}/${path.length}: ${segment.title || segment.id} …`);
+      status(t("catLevelStatus", { done: index + 1, total: path.length, name: segment.title || segment.id }));
       if (!await clickCategoryLevel(segment.id ?? null, segment.title || "")) {
-        console.warn("[ReVint] Kategorie-Ebene nicht gefunden:", segment);
+        console.warn(`[ReVint] ${t("logCategoryLevel")}`, segment);
         break;
       }
       filled++;
@@ -1085,7 +1085,7 @@
       const leaf = path.at(-1)?.title || "";
       const search = categorySearchInput();
       if (search && leaf) {
-        status(`Kategorie: Suche nach ${leaf} …`);
+        status(t("catSearch", { name: leaf }));
         setField(search, leaf);
         search.dispatchEvent(new Event("keyup", { bubbles: true }));
         for (let attempt = 0; attempt < 12; attempt++) {
@@ -1104,10 +1104,10 @@
     }
 
     if (!filled) {
-      console.warn("[ReVint] Kategorie konnte nicht automatisch gesetzt werden.");
+      console.warn(`[ReVint] ${t("logCategoryFail")}`);
       return 0;
     }
-    status(`Kategorie: ${filled}/${path.length} Ebenen gesetzt.`);
+    status(t("catDone", { done: filled, total: path.length }));
     return filled;
   }
 
@@ -1146,7 +1146,7 @@
     if (!values.length) return false;
     const opener = dropdownOpener(label, testidHints, avoidWords);
     if (!opener) {
-      console.warn(`[ReVint] ${logName}-Feld wurde nicht gefunden.`);
+      console.warn(`[ReVint] ${t("logFieldNotFound", { name: logName })}`);
       return false;
     }
     const beforeText = matchText(opener.textContent || opener.value || "");
@@ -1166,7 +1166,7 @@
       }
     }
     if (!picked) {
-      console.warn(`[ReVint] ${logName}: Option ${values.join(" / ")} nicht gefunden.`);
+      console.warn(`[ReVint] ${t("logOptionNotFound", { name: logName, options: values.join(" / ") })}`);
       return false;
     }
     status(`${logName}: ${picked.value} …`);
@@ -1181,7 +1181,7 @@
     const verified = afterText !== beforeText
       || (number && afterText.includes(number))
       || afterText.includes(matchText(picked.value));
-    if (!verified) console.warn(`[ReVint] ${logName}: Auswahl wurde nicht übernommen.`);
+    if (!verified) console.warn(`[ReVint] ${t("logNotApplied", { name: logName })}`);
     opener.blur?.();
     await dismissOverlays();
     return verified;
@@ -1231,7 +1231,7 @@
         filled = true;
         continue;
       }
-      if (await fillAttribute("video_game_platform", "Plattform", [name], status)) filled = true;
+      if (await fillAttribute("video_game_platform", t("notePlatform"), [name], status)) filled = true;
     }
     return filled;
   }
@@ -1239,7 +1239,7 @@
   async function fillBrand(item, status = () => {}) {
     const brand = clean(item?.brand);
     if (!brand) return false;
-    const opener = dropdownOpener("marke", ["[data-testid='brand-select-dropdown-input']", "[name='brand']"]);
+    const opener = dropdownOpener(t("noteBrand"), ["[data-testid='brand-select-dropdown-input']", "[name='brand']"]);
     if (!opener) return false;
     const isInput = opener instanceof HTMLInputElement || opener instanceof HTMLTextAreaElement;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -1264,7 +1264,7 @@
         return true;
       }
     }
-    console.warn(`[ReVint] Marke „${brand}“ nicht gefunden.`);
+    console.warn(`[ReVint] ${t("logBrandNotFound", { name: brand })}`);
     return false;
   }
 
@@ -1305,9 +1305,9 @@
   async function fillColor(item, status = () => {}) {
     const colors = [...new Set((item?.colors || []).filter(Boolean))].slice(0, 2);
     if (!colors.length) return false;
-    const opener = dropdownOpener("farbe", attributeSelectors("color"));
+    const opener = dropdownOpener(t("noteColor"), attributeSelectors("color"));
     if (!opener) {
-      console.warn("[ReVint] Farbfeld wurde nicht gefunden.");
+      console.warn(`[ReVint] ${t("logNoColorField")}`);
       return false;
     }
     const current = matchText(opener.value || opener.textContent || "");
@@ -1338,7 +1338,7 @@
 
     const selected = matchText(opener.value || opener.textContent || "");
     const applied = colors.some((color) => selected.includes(matchText(color)));
-    if (!applied) console.warn(`[ReVint] Farbe ${colors.join(" / ")} konnte nicht gesetzt werden.`);
+    if (!applied) console.warn(`[ReVint] ${t("logColorFail", { name: colors.join(" / ") })}`);
     return applied;
   }
 
@@ -1367,7 +1367,7 @@
   async function setPrice(value) {
     const price = formatPrice(value);
     if (!price) {
-      console.warn("[ReVint] Keine Preisangabe in der ReVint-Datei.");
+      console.warn(`[ReVint] ${t("logNoPrice")}`);
       return false;
     }
     let field = null;
@@ -1376,7 +1376,7 @@
       if (!field) await wait(300);
     }
     if (!field) {
-      console.warn("[ReVint] Preisfeld wurde nicht gefunden.");
+      console.warn(`[ReVint] ${t("logNoPriceField")}`);
       return false;
     }
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -1385,8 +1385,18 @@
       if (String(field.value) === price) return true;
       field = fieldBy(["preis", "price"]) || field;
     }
-    console.warn("[ReVint] Preis konnte nicht gesetzt werden.");
+    console.warn(`[ReVint] ${t("logPriceFail")}`);
     return false;
+  }
+
+  async function waitForFileInput(timeout = 5000) {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const input = [...document.querySelectorAll('input[type="file"]')].find((element) => !element.closest(".revint-panel"));
+      if (input) return input;
+      await wait(200);
+    }
+    return null;
   }
 
   function dataUrlFile(image) {
@@ -1395,14 +1405,14 @@
   }
 
   async function fillForm(bundle, status) {
-    if (bundle?.format !== FORMAT || bundle?.version !== VERSION || !bundle.item) throw new Error("Keine gültige ReVint-Datei");
+    if (bundle?.format !== FORMAT || bundle?.version !== VERSION || !bundle.item) throw new Error(t("errInvalidFile"));
     const item = bundle.item;
-    console.info("[ReVint] Zu importierende Relisting-Daten:", item);
+    console.info(`[ReVint] ${t("logImportData")}`, item);
     let filled = 0;
     if (await setTextWhenReady(["titel", "title"], item.title, 8000)) filled++;
     if (await setTextWhenReady(["beschreibung", "description"], item.description, 8000)) filled++;
 
-    const fileInput = [...document.querySelectorAll('input[type="file"]')].find((input) => input !== document.querySelector(".revint-panel input"));
+    const fileInput = await waitForFileInput();
     if (fileInput && item.images?.length) {
       const transfer = new DataTransfer();
       item.images.forEach((image) => transfer.items.add(dataUrlFile(image)));
@@ -1410,39 +1420,40 @@
       fileInput.dispatchEvent(new Event("change", { bubbles: true }));
       filled += item.images.length;
       await wait(800);
-    } else if (!item.images?.length) console.error("[ReVint] Die ReVint-Datei enthält keine Bilder. Bitte das Relisting erneut exportieren.");
-    else console.error("[ReVint] Vinteds Datei-Eingabefeld wurde nicht gefunden.");
+    } else if (!item.images?.length) console.error(`[ReVint] ${t("logNoImages")}`);
+    else console.error(`[ReVint] ${t("logNoFileInput")}`);
 
     const categories = await fillCategory(item);
     const condition = await fillVintedDropdown("zustand", [
       "[data-testid='condition-select-dropdown-input']",
       "[data-testid='condition-select-dropdown-chevron']",
       "[data-testid='status-select-dropdown-input']"
-    ], conditionCandidates(item.condition), "Zustand", status);
+    ], conditionCandidates(item.condition), t("noteCondition"), status);
     const platforms = await fillPlatforms(item, status);
-    const size = await fillAttribute("size", "Größe", sizeCandidates(item.size), status,
+    const size = await fillAttribute("size", t("noteSize"), sizeCandidates(item.size), status,
       ["versand", "paket", "pushen", "schneller", "sichtbarkeit", "spotlight"]);
-    const ageRating = await fillAttribute("video_game_ratings", "Altersbeschränkung", [item.ageRating], status);
+    const ageRating = await fillAttribute("video_game_ratings", t("noteRating"), [item.ageRating], status);
     const brand = await fillBrand(item, status);
     const colors = await fillColor(item, status);
-    const material = await fillAttribute("material", "Material", materialCandidates(item.material), status);
+    const material = await fillAttribute("material", t("noteMaterial"), materialCandidates(item.material), status);
     const isbn = await setTextWhenReady(["isbn"], item.isbn);
     if (isbn) filled++;
     const price = await setPrice(item.price);
     if (price) filled++;
+    const note = (key, ok) => t(ok ? key : "noteManual", { name: t(key) });
     const notes = [
-      categories ? `${categories} Kategorie-Ebene(n)` : "Kategorie bitte selbst wählen",
-      condition ? "Zustand" : "Zustand bitte selbst wählen"
+      categories ? t("noteCategoryLevels", { count: categories }) : t("noteManual", { name: t("noteCategory") }),
+      note("noteCondition", condition)
     ];
-    if (item.brand) notes.push(brand ? "Marke" : "Marke bitte selbst wählen");
-    if (item.colors?.length) notes.push(colors ? "Farbe" : "Farbe bitte selbst wählen");
-    if (item.material) notes.push(material ? "Material" : "Material bitte selbst wählen");
-    if (item.platforms?.length) notes.push(platforms ? "Plattform" : "Plattform bitte selbst wählen");
-    if (item.size) notes.push(size ? "Größe" : "Größe bitte selbst wählen");
-    if (item.ageRating) notes.push(ageRating ? "Altersbeschränkung" : "Altersbeschränkung bitte selbst wählen");
-    if (item.isbn) notes.push(isbn ? "ISBN" : "ISBN bitte selbst eingeben");
-    if (!price) notes.push("Preis bitte selbst eingeben");
-    status(`${filled} Angaben eingefügt (${notes.join(", ")}). Auswahlfelder bitte prüfen.`);
+    if (item.brand) notes.push(note("noteBrand", brand));
+    if (item.colors?.length) notes.push(note("noteColor", colors));
+    if (item.material) notes.push(note("noteMaterial", material));
+    if (item.platforms?.length) notes.push(note("notePlatform", platforms));
+    if (item.size) notes.push(note("noteSize", size));
+    if (item.ageRating) notes.push(note("noteRating", ageRating));
+    if (item.isbn) notes.push(note("noteIsbn", isbn));
+    if (!price) notes.push(t("notePriceManual"));
+    status(t("noteSummary", { count: filled, notes: notes.join(", ") }));
     document.activeElement?.blur?.();
     await dismissOverlays();
   }

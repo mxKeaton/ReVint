@@ -142,7 +142,7 @@ const handlers = {
   "fetch-image": async ({ url }) => {
     const response = await fetchWithCredentials(url);
     const blob = await response.blob();
-    if (blob.size > MAX_IMAGE_BYTES) throw new Error("Bild ist größer als 15 MB");
+    if (blob.size > MAX_IMAGE_BYTES) throw new Error("Image is larger than 15 MB");
     const bytes = new Uint8Array(await blob.arrayBuffer());
     return { image: { data: toBase64(bytes), type: blob.type || "image/jpeg" } };
   },
