@@ -488,7 +488,23 @@
   function findMemberUrl() {
     const link = [...document.querySelectorAll('a[href*="/member/"]')]
       .find((element) => /\/member\/\d+/.test(element.getAttribute("href") || ""));
-    return link ? new URL(link.href, location.href).href : `${location.origin}/member`;
+    return link ? new URL(link.href, location.href).href : "";
+  }
+
+  async function openMemberPage() {
+    let url = findMemberUrl();
+    if (!url) {
+      const trigger = document.querySelector('[data-testid="user-menu-button"]');
+      if (trigger) {
+        trigger.click();
+        for (let attempt = 0; attempt < 12 && !url; attempt++) {
+          await wait(150);
+          url = findMemberUrl();
+        }
+      }
+    }
+    if (url) location.assign(url);
+    else console.warn("[ReVint] Mitgliederseite wurde nicht gefunden.");
   }
 
   async function enqueueAutoImport(name) {
@@ -535,7 +551,7 @@
         const collapsed = home.classList.toggle("revint-collapsed");
         collapse.textContent = collapsed ? "▾" : "▴";
       });
-      home.querySelector(".revint-home-button").addEventListener("click", () => location.assign(findMemberUrl()));
+      home.querySelector(".revint-home-button").addEventListener("click", openMemberPage);
       document.body.appendChild(home);
       return;
     }

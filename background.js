@@ -147,6 +147,11 @@ const handlers = {
     return { image: { data: toBase64(bytes), type: blob.type || "image/jpeg" } };
   },
 
+  "open-tab": async ({ url, active }) => {
+    const tab = await chrome.tabs.create({ url, active: active !== false });
+    return { tabId: tab.id };
+  },
+
   "list-files": async () => {
     const entries = await storeAll();
     const files = entries.map((entry) => ({ name: entry.name, lastModified: entry.createdAt || 0 }));
