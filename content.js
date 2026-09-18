@@ -1100,7 +1100,7 @@
       }
       const row = (container && rowMatch(container, name)) || rowMatch(document.body, name);
       if (row) { clickableTarget(row).click(); return true; }
-      await wait(350);
+      await wait(140);
     }
     return false;
   }
@@ -1140,7 +1140,7 @@
         opener.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
         opener.click();
         opener.focus?.();
-        await wait(300);
+        await wait(120);
       }
     }
     if (!pickerContainer()) {
@@ -1161,7 +1161,7 @@
         break;
       }
       filled++;
-      await wait(450);
+      await wait(170);
     }
 
     if (filled < path.length) {
@@ -1172,7 +1172,7 @@
         setField(search, leaf);
         search.dispatchEvent(new Event("keyup", { bubbles: true }));
         for (let attempt = 0; attempt < 12; attempt++) {
-          await wait(300);
+          await wait(120);
           const result = rowMatch(pickerContainer() || document.body, leaf);
           if (result) { clickableTarget(result).click(); filled = path.length; break; }
         }
@@ -1180,10 +1180,10 @@
     }
 
     if (filled > 0) {
-      await wait(300);
+      await wait(120);
       const save = dropdownSaveButton();
       if (save) robustClick(save);
-      for (let attempt = 0; attempt < 16 && pickerVisible(); attempt++) await wait(300);
+      for (let attempt = 0; attempt < 16 && pickerVisible(); attempt++) await wait(120);
     }
 
     if (!filled) {
@@ -1336,14 +1336,14 @@
         opener.dispatchEvent(new Event("keyup", { bubbles: true }));
       }
       for (let poll = 0; poll < 10; poll++) {
-        await wait(250);
+        await wait(100);
         const row = exactRowMatch(pickerContainer() || document.body, brand) || exactRowMatch(document.body, brand);
         if (!row) continue;
         status(`${t("noteBrand")}: ${brand} …`);
         robustClick(row);
-        await wait(300);
+        await wait(120);
         const save = dropdownSaveButton();
-        if (save) { try { clickableTarget(save).click(); } catch (_) {} await wait(300); }
+        if (save) { try { clickableTarget(save).click(); } catch (_) {} await wait(120); }
         return true;
       }
     }
@@ -1381,7 +1381,7 @@
         document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
         document.body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
       }
-      await wait(200);
+      await wait(100);
     }
   }
 
@@ -1404,18 +1404,18 @@
     } catch (_) {}
 
     for (let poll = 0; poll < 12 && remaining.length; poll++) {
-      await wait(250);
+      await wait(100);
       const color = remaining[0];
       const row = rowByAnyText(pickerContainer() || document.body, color) || rowByAnyText(document.body, color);
       if (!row) continue;
       status(`${t("noteColor")}: ${color} …`);
       robustClick(clickableTarget(row));
       remaining.splice(0, 1);
-      await wait(300);
+      await wait(120);
     }
 
     const save = dropdownSaveButton();
-    if (save) { try { clickableTarget(save).click(); } catch (_) {} await wait(300); }
+    if (save) { try { clickableTarget(save).click(); } catch (_) {} await wait(120); }
     opener.blur?.();
     await dismissOverlays();
 
