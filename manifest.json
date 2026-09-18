@@ -9,6 +9,7 @@
     "storage"
   ],
   "host_permissions": [
+    "*://*.vinted.net/*",
     "*://*.vinted.com/*",
     "*://*.vinted.co.uk/*",
     "*://*.vinted.ie/*",
