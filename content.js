@@ -417,7 +417,7 @@
     return describeCard(card || link.parentElement, link);
   }
 
-  async function exportCard(card, setStatus) {
+  async function buildBundle(card, setStatus) {
     if (!card.url) throw new Error(t("errNoLink"));
     setStatus(t("statusReading"));
     const page = await message({ type: "fetch-text", url: card.url });
@@ -428,11 +428,50 @@
     delete item.imageUrls;
     const bundle = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), item };
     const safeTitle = (item.title || "relisting").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
-    const filename = `${safeTitle}.revint.json`;
-    const contents = JSON.stringify(bundle);
+    return { filename: `${safeTitle}.revint.json`, bundle, sourceUrl: item.sourceUrl || card.url };
+  }
 
-    const saved = await message({ type: "save-file", filename, contents, sourceUrl: item.sourceUrl || card.url });
+  async function exportCard(card, setStatus) {
+    const { filename, bundle, sourceUrl } = await buildBundle(card, setStatus);
+    const saved = await message({ type: "save-file", filename, contents: JSON.stringify(bundle), sourceUrl });
     if (!saved?.ok) throw new Error(saved?.error || t("errSave"));
+  }
+
+  async function pickSaveDirectory() {
+    if (typeof window.showDirectoryPicker !== "function") {
+      console.warn(`[ReVint] ${t("logManualUnsupported")}`);
+      return null;
+    }
+    try {
+      return await window.showDirectoryPicker({ mode: "readwrite" });
+    } catch (error) {
+      if (error?.name === "AbortError") return null;
+      console.error(`[ReVint] ${t("logManualFolderFailed")}`, error?.message || error);
+      return null;
+    }
+  }
+
+  async function uniqueDirectoryFilename(dirHandle, filename) {
+    const stem = filename.replace(/\.revint\.json$/i, "");
+    for (let counter = 1; counter <= 100; counter++) {
+      const candidate = counter === 1 ? filename : `${stem}-${counter}.revint.json`;
+      try {
+        await dirHandle.getFileHandle(candidate);
+      } catch (_) {
+        return candidate;
+      }
+    }
+    return `${stem}-${Date.now()}.revint.json`;
+  }
+
+  async function saveCardToDirectory(card, setStatus, dirHandle) {
+    const { filename, bundle } = await buildBundle(card, setStatus);
+    const name = await uniqueDirectoryFilename(dirHandle, filename);
+    const handle = await dirHandle.getFileHandle(name, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(bundle));
+    await writable.close();
+    return name;
   }
 
   async function exportItem(button) {
@@ -465,10 +504,13 @@
     return [...byPath.values()];
   }
 
-  async function batchExport(activeOnly, progress) {
+  function memberItems(activeOnly) {
     const inactive = /verkauft|sold|verborgen|versteckt|ausgeblendet|hidden/i;
     const allItems = listedMemberItems();
-    const items = activeOnly ? allItems.filter((item) => !inactive.test(item.stateText)) : allItems;
+    return activeOnly ? allItems.filter((item) => !inactive.test(item.stateText)) : allItems;
+  }
+
+  async function batchExport(items, progress, saveItem) {
     if (!items.length) {
       console.error(`[ReVint] ${t("logNoItems")}`);
       return;
@@ -478,7 +520,8 @@
     const failed = [];
     const exportOne = async (item) => {
       try {
-        await exportCard(item, () => {});
+        if (saveItem) await saveItem(item);
+        else await exportCard(item, () => {});
         succeeded++;
         done++;
         progress?.update(done, items.length);
@@ -622,7 +665,16 @@
       `<button type="button" class="revint-button revint-delete-selected" disabled>${t("deleteSelected")}</button>`,
       '</div>',
       mode === "member"
-        ? `<button type="button" class="revint-button revint-export-all">${t("saveAll")}</button><button type="button" class="revint-button revint-export-active">${t("saveListed")}</button>`
+        ? [
+            '<div class="revint-button-row">',
+            `<button type="button" class="revint-button revint-export-all">${t("saveAll")}</button>`,
+            `<button type="button" class="revint-button revint-export-active">${t("saveListed")}</button>`,
+            '</div>',
+            '<div class="revint-button-row">',
+            `<button type="button" class="revint-button revint-export-all-manual">${t("saveAllManual")}</button>`,
+            `<button type="button" class="revint-button revint-export-active-manual">${t("saveListedManual")}</button>`,
+            '</div>'
+          ].join("")
         : `<button type="button" class="revint-button revint-manual-button">${t("manual")}</button><input type="file" accept=".json,.revint.json,application/json" hidden>`,
       '</div>',
       '<div class="revint-import-view" hidden>',
@@ -872,11 +924,13 @@
     if (mode === "member") {
       const allButton = panel.querySelector(".revint-export-all");
       const activeButton = panel.querySelector(".revint-export-active");
+      const allManualButton = panel.querySelector(".revint-export-all-manual");
+      const activeManualButton = panel.querySelector(".revint-export-active-manual");
       const exportButtons = [allButton, activeButton];
       const runExport = async (activeOnly) => {
         exportButtons.forEach((button) => { button.disabled = true; });
         try {
-          await batchExport(activeOnly, progress);
+          await batchExport(memberItems(activeOnly), progress);
           await refresh();
         } finally {
           exportButtons.forEach((button) => { button.disabled = false; });
@@ -884,6 +938,27 @@
       };
       allButton.addEventListener("click", () => runExport(false));
       activeButton.addEventListener("click", () => runExport(true));
+
+      const manualButtons = [allManualButton, activeManualButton];
+      const runManualExport = async (activeOnly) => {
+        const items = memberItems(activeOnly);
+        if (!items.length) {
+          console.error(`[ReVint] ${t("logNoItems")}`);
+          return;
+        }
+        manualButtons.forEach((button) => { button.disabled = true; });
+        try {
+          // The directory picker must run inside the click gesture, so it is
+          // the first await after the synchronous item lookup above.
+          const dirHandle = await pickSaveDirectory();
+          if (!dirHandle) return;
+          await batchExport(items, progress, (item) => saveCardToDirectory(item, () => {}, dirHandle));
+        } finally {
+          manualButtons.forEach((button) => { button.disabled = false; });
+        }
+      };
+      allManualButton.addEventListener("click", () => runManualExport(false));
+      activeManualButton.addEventListener("click", () => runManualExport(true));
     } else {
       const manualButton = panel.querySelector(".revint-manual-button");
       const input = panel.querySelector("input[type=file]");

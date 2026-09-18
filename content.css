@@ -19,6 +19,17 @@
   color: #9a9a9a;
   cursor: not-allowed;
 }
+.revint-button-row {
+  display: flex;
+  gap: 8px;
+}
+.revint-button-row .revint-button {
+  flex: 1 1 0;
+  font-size: 12px;
+  min-height: 26px;
+  padding: 4px 6px;
+  width: auto;
+}
 
 .revint-panel {
   background: #fff;
@@ -298,6 +309,6 @@
 }
 .revint-selection-actions .revint-button {
   font-size: 12px;
-  min-height: 30px;
-  padding: 5px 8px;
+  min-height: 26px;
+  padding: 4px 6px;
 }
