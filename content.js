@@ -315,7 +315,7 @@
       size: sizeValue || details.size || displayValue(size) || clean(deepFind(hydratedItem, ["size_title"])),
       ageRating,
       condition: conditionValue || details.condition || displayValue(condition) || clean(deepFind(hydratedItem, ["status_title", "condition_title"])),
-      colors: colorValue ? [colorValue] : details.color ? details.color.split(/,|\//).map(clean).filter(Boolean) : listValues(colors),
+      colors: colorValue ? colorValue.split(/,|\/|;/).map(clean).filter(Boolean) : details.color ? details.color.split(/,|\/|;/).map(clean).filter(Boolean) : listValues(colors),
       material: materialValue || details.material || listValues(materials).join(", ") || clean(deepFind(hydratedItem, ["material_title"])),
       parcelSize: details.parcelSize || displayValue(parcelSize) || clean(deepFind(hydratedItem, ["package_size_title"])),
       isbn: isbnValue || details.isbn || "",
@@ -1395,6 +1395,19 @@
     return true;
   }
 
+  // Masked / controlled inputs (like Vinted's price field) sometimes ignore a
+  // programmatic value but accept real text insertion, so simulate typing.
+  function typeIntoField(field, value) {
+    if (!field || value === undefined || value === null || value === "") return false;
+    const text = String(value);
+    try { field.focus(); } catch (_) {}
+    try { field.setSelectionRange(0, field.value.length); } catch (_) {}
+    let inserted = false;
+    try { inserted = document.execCommand("insertText", false, text); } catch (_) { inserted = false; }
+    if (!inserted) setField(field, text);
+    return true;
+  }
+
   function isInteractable(element) {
     if (!element || element.disabled || element.type === "hidden") return false;
     if (element.getAttribute?.("aria-hidden") === "true") return false;
@@ -1527,30 +1540,37 @@
     if (!target) return null;
     const exact = [];
     let partial = null;
-    const nodes = root.querySelectorAll("button, li, div, span, p, [role='button'], [role='option'], [role='menuitem']");
+    const nodes = root.querySelectorAll("button, li, div, span, p, a[href*='/catalog/'], [role='button'], [role='option'], [role='menuitem'], [aria-label]");
     for (const element of nodes) {
       if (!isInteractable(element)) continue;
-      if (element.closest(".revint-panel, a[href], header, nav, footer, [role='navigation'], [role='tablist'], [role='tab'], [data-testid^='catalog-navigation']")) continue;
-      if (element.querySelector("input, textarea, a[href]")) continue;
-      const text = matchText(element.textContent);
-      if (!text) continue;
-      if (text === target) exact.push(element);
-      else if (!partial && text.includes(target) && text.length <= target.length + 16) partial = element;
+      if (element.closest(".revint-panel, header, nav, footer, [role='navigation'], [role='tablist'], [role='tab'], [data-testid^='catalog-navigation']")) continue;
+      if (element.closest("a[href]:not([href*='/catalog/'])")) continue;
+      if (element.querySelector("input, textarea")) continue;
+      const texts = [element.textContent, element.getAttribute("aria-label"), element.getAttribute("title"), element.dataset?.value]
+        .filter(Boolean).map(matchText).filter(Boolean);
+      if (!texts.length) continue;
+      if (texts.some((text) => text === target)) exact.push(element);
+      else if (!partial && texts.some((text) => text.includes(target) && text.length <= target.length + 24)) partial = element;
     }
     exact.sort((a, b) => a.getElementsByTagName("*").length - b.getElementsByTagName("*").length);
     return exact[0] || partial;
   }
 
   async function clickCategoryLevel(id, name) {
-    for (let attempt = 0; attempt < 16; attempt++) {
+    const nameParts = String(name || "").split(/[,/|]/).map((part) => part.trim()).filter(Boolean);
+    for (let attempt = 0; attempt < 20; attempt++) {
       const container = pickerContainer();
       if (container && id) {
-        const icon = container.querySelector(`[data-testid='catalog-icon-${id}']`);
+        const icon = container.querySelector(`[data-testid='catalog-icon-${id}']`)
+          || container.querySelector(`[data-testid*='catalog-icon-${id}']`)
+          || container.querySelector(`[data-value='${id}'], [value='${id}']`);
         if (icon && isInteractable(icon)) { clickableTarget(icon).click(); return true; }
       }
-      const row = (container && rowMatch(container, name)) || rowMatch(document.body, name);
-      if (row) { clickableTarget(row).click(); return true; }
-      await wait(140);
+      for (const part of nameParts.length ? nameParts : [name]) {
+        const row = (container && rowMatch(container, part)) || rowMatch(document.body, part);
+        if (row) { clickableTarget(row).click(); return true; }
+      }
+      await wait(150);
     }
     return false;
   }
@@ -1839,7 +1859,10 @@
   }
 
   async function fillColor(item, status = () => {}) {
-    const colors = [...new Set((item?.colors || []).filter(Boolean))].slice(0, 2);
+    const colors = [...new Set((item?.colors || [])
+      .flatMap((value) => String(value).split(/[,;/]/))
+      .map((value) => value.trim())
+      .filter(Boolean))].slice(0, 2);
     if (!colors.length) return false;
     const opener = await waitForDropdownOpener(FIELD_LABELS.color, attributeSelectors("color"));
     if (!opener) {
@@ -1882,11 +1905,58 @@
     return [...new Set(String(value || "").split(/[,;\/]/).map((part) => part.trim()).filter(Boolean))];
   }
 
+  // Every language ReVint supports that uses a comma decimal separator.
+  // English (vinted.com / .co.uk / .ie) is the only dot-decimal market.
+  const COMMA_DECIMAL_LOCALES = new Set([
+    "de", "fr", "nl", "es", "it", "pt", "pl", "lt", "lv", "et", "cs", "sk",
+    "hu", "ro", "sv", "da", "fi", "el", "hr", "bg", "sl"
+  ]);
+
   function formatPrice(value) {
-    const raw = String(value == null ? "" : value).replace(/[^\d.,]/g, "").replace(",", ".");
+    let raw = String(value == null ? "" : value).replace(/[^\d.,]/g, "");
     if (!raw) return "";
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+    if (lastComma !== -1 && lastDot !== -1) {
+      raw = lastComma > lastDot ? raw.replace(/\./g, "").replace(",", ".") : raw.replace(/,/g, "");
+    } else if (lastComma !== -1) {
+      raw = raw.length - lastComma - 1 === 3 ? raw.replace(/,/g, "") : raw.replace(",", ".");
+    } else if (lastDot !== -1) {
+      if (raw.length - lastDot - 1 === 3) raw = raw.replace(/\./g, "");
+    }
     const number = Number(raw);
     return Number.isFinite(number) ? String(number) : raw;
+  }
+
+  function priceField() {
+    const fields = [...document.querySelectorAll("input:not([type=file]), textarea")].filter(isInteractable);
+    const exclude = /original|discount|strikethrough|shipping|parcel|versand|rabatt|metav|μεταφορ|έκπτωσ|αρχικ/i;
+    const labeled = fields.find((field) => {
+      const label = norm(`${field.name || ""} ${field.id || ""} ${field.dataset?.testid || ""}`);
+      return /price|preis|τιμ/.test(label) && !exclude.test(label);
+    });
+    return labeled || fieldBy(["0,00"]) || fieldBy(["0.00"]) || null;
+  }
+
+  function localeUsesComma(locale) {
+    const code = String(locale || "").toLowerCase().split(/[-_]/)[0];
+    return COMMA_DECIMAL_LOCALES.has(code);
+  }
+
+  function priceSeparator(field) {
+    if (field?.type === "number") return ".";
+    // 1. The field itself (placeholder / aria-label) knows best.
+    const hint = `${field?.placeholder || ""} ${field?.getAttribute?.("aria-label") || ""}`;
+    if (hint.includes(",")) return ",";
+    if (hint.includes(".")) return ".";
+    // 2. The rendered page language.
+    const pageLang = document.documentElement?.lang;
+    if (localeUsesComma(pageLang)) return ",";
+    if (pageLang) return ".";
+    // 3. The user's browser language.
+    if (navigator.language) return localeUsesComma(navigator.language) ? "," : ".";
+    // 4. The marketplace the extension detected.
+    return localeUsesComma(detectedLanguage) ? "," : ".";
   }
 
   async function setTextWhenReady(hints, value, timeout = 5000) {
@@ -1908,20 +1978,39 @@
     }
     let field = null;
     for (let attempt = 0; attempt < 12 && !field; attempt++) {
-      field = fieldBy(["preis", "price"]) || fieldBy(["0,00"]);
+      field = priceField();
       if (!field) await wait(300);
     }
     if (!field) {
       console.warn(`[ReVint] ${t("logNoPriceField")}`);
       return false;
     }
-    for (let attempt = 0; attempt < 4; attempt++) {
-      setField(field, price);
-      await wait(250);
-      if (String(field.value) === price) return true;
-      field = fieldBy(["preis", "price"]) || field;
+    const numeric = Number(price);
+    const fixed = Number.isFinite(numeric) ? numeric.toFixed(2) : price;
+    // Vinted's price input parses the raw value with dot semantics and only
+    // converts a comma typed via the keyboard, so a programmatic comma makes
+    // its preview show "NaN €". Write the canonical dot value first and only
+    // try the locale separator if the field rejects it.
+    const candidates = Number.isFinite(numeric)
+      ? [...new Set([String(numeric), fixed, fixed.replace(".", priceSeparator(field))])]
+      : [price];
+    const normalize = (input) => {
+      const text = String(input == null ? "" : input).replace(/[^\d.,-]/g, "").replace(",", ".");
+      const number = Number(text);
+      return Number.isFinite(number) ? String(number) : text;
+    };
+    if (normalize(field.value) === normalize(price)) return true;
+    for (const candidate of candidates) {
+      typeIntoField(field, candidate);
+      await wait(300);
+      if (normalize(field.value) === normalize(price)) return true;
+      // Some masks only commit on blur/change.
+      try { field.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
+      await wait(150);
+      if (normalize(field.value) === normalize(price)) return true;
+      field = priceField() || field;
     }
-    console.warn(`[ReVint] ${t("logPriceFail")}`);
+    console.warn(`[ReVint] ${t("logPriceFail")}`, { value, candidates, current: field?.value });
     return false;
   }
 
