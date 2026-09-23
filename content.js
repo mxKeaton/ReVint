@@ -114,6 +114,24 @@
     });
   }
 
+  // The relist form drops price/brand/colour/isbn from its submitted model
+  // (their widgets ignore synthetic events). Hand those values to the page so
+  // it can inject them into the outgoing upload request.
+  let uploadPatchValues = null;
+  function setUploadPatch(item) {
+    uploadPatchValues = {
+      price: item?.price != null && item.price !== "" ? Number(formatPrice(item.price)) : null,
+      brandId: item?.brandId ?? null,
+      colorIds: Array.isArray(item?.colorIds) ? item.colorIds : [],
+      isbn: item?.isbn || ""
+    };
+  }
+
+  async function installUploadPatch() {
+    if (!uploadPatchValues) return;
+    return message({ type: "install-upload-patch", values: uploadPatchValues });
+  }
+
   function allJson(root) {
     const values = [];
     for (const script of root.querySelectorAll('script[type="application/json"], script[type="application/ld+json"], script[id*="state" i], script[id*="data" i]')) {
@@ -291,6 +309,17 @@
     const conditionValue = clean(doc.querySelector("[data-testid='item-attributes-status'] [itemprop='status'], [itemprop='status']")?.textContent);
     const colorValue = clean(doc.querySelector("[data-testid='item-attributes-color'] [itemprop='color'], [itemprop='color']")?.textContent);
     const materialValue = clean(doc.querySelector("[data-testid='item-attributes-material'] [itemprop='material'], [itemprop='material']")?.textContent);
+    // Internal ids the relist form model refuses to accept from synthetic
+    // events; reused to patch the upload request instead.
+    const brandHref = brandRow?.querySelector("a[href*='/brand/']")?.getAttribute("href")
+      || doc.querySelector("a[href*='/brand/']")?.getAttribute("href") || "";
+    const brandIdValue = Number((brandHref.match(/\/brand\/(\d+)/) || [])[1])
+      || Number(deepFind(hydratedItem, ["brand_id"]) ?? hydratedItem.brand?.id) || null;
+    const colorIdValues = [...new Set([
+      ...(Array.isArray(hydratedItem.color_ids) ? hydratedItem.color_ids : []),
+      ...(Array.isArray(hydratedItem.colors) ? hydratedItem.colors.map((entry) => (entry && typeof entry === "object" ? entry.id : null)) : []),
+      ...[...doc.querySelectorAll("[data-testid='item-attributes-color'] a[href]")].map((anchor) => ((anchor.getAttribute("href") || "").match(/(\d+)/) || [])[1])
+    ].map(Number).filter(Boolean))];
     const linkText = (part) => clean(doc.querySelector(`a[href*="${part}"]`)?.textContent);
     const category = hydratedItem.catalog || hydratedItem.category || linkText("/catalog/");
     const brand = hydratedItem.brand || linkText("/brand/");
@@ -312,6 +341,8 @@
       categoryPath,
       platforms: platformsFromDoc(doc),
       brand: brandValue || details.brand || displayValue(brand) || clean(product.brand?.name || product.brand || deepFind(hydratedItem, ["brand_title"])),
+      brandId: brandIdValue,
+      colorIds: colorIdValues,
       size: sizeValue || details.size || displayValue(size) || clean(deepFind(hydratedItem, ["size_title"])),
       ageRating,
       condition: conditionValue || details.condition || displayValue(condition) || clean(deepFind(hydratedItem, ["status_title", "condition_title"])),
@@ -1355,6 +1386,7 @@
     } catch (_) {}
     button.disabled = true;
     setButtonLabel(button, t("publishDeleteWorking"));
+    await installUploadPatch();
     robustClick(submit);
     await wait(15000);
     if (document.body.contains(button)) {
@@ -1395,6 +1427,53 @@
     return true;
   }
 
+  // Like setField but also accepts an empty string (used to purge a field that
+  // has latched onto an invalid value before retyping it).
+  function forceValue(field, value) {
+    if (!field) return false;
+    try {
+      const prototype = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, "value")?.set.call(field, String(value));
+    } catch (_) {
+      try { field.value = String(value); } catch (_) {}
+    }
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  function lastDigitIndex(text) {
+    for (let index = text.length - 1; index >= 0; index--) if (/\d/.test(text[index])) return index;
+    return -1;
+  }
+
+  // React controlled inputs can show a value in the DOM while their internal
+  // state stays empty; validation then treats the field as missing (the price
+  // screenshots "at least 1.0 €" even though "3,00 €" is visible). Re-type the
+  // last digit through real input events so the framework registers the value —
+  // the same effect as deleting and retyping it by hand.
+  function nudgeField(field) {
+    if (!field) return;
+    const before = String(field.value == null ? "" : field.value);
+    const index = lastDigitIndex(before);
+    if (index < 0) return;
+    try {
+      field.focus();
+      field.setSelectionRange(index, index + 1);
+      const deleted = document.execCommand("delete");
+      const inserted = document.execCommand("insertText", false, before[index]);
+      if (!deleted || !inserted || String(field.value) !== before) setField(field, before);
+    } catch (_) {
+      // Number inputs reject selection APIs; bounce the value instead.
+      const prototype = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      try {
+        Object.getOwnPropertyDescriptor(prototype, "value")?.set.call(field, "");
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (_) {}
+      setField(field, before);
+    }
+  }
+
   // Masked / controlled inputs (like Vinted's price field) sometimes ignore a
   // programmatic value but accept real text insertion, so simulate typing.
   function typeIntoField(field, value, options = {}) {
@@ -1406,26 +1485,63 @@
     let inserted = false;
     try { inserted = document.execCommand("insertText", false, text); } catch (_) { inserted = false; }
     if (!inserted || !read()) setField(field, text);
-    // React controlled inputs can keep the DOM value while their internal state
-    // stays empty (the field then validates as missing, even though the text is
-    // visible). Re-type the last character through real input events to force a
-    // change the framework registers — the same fix as deleting and retyping.
-    // Only for plain text fields: masked inputs could reformat mid-nudge.
-    const before = options.nudge ? read() : "";
-    if (before) {
-      const last = before.slice(-1);
-      try {
-        field.setSelectionRange(before.length - 1, before.length);
-        if (document.execCommand("delete")) {
-          document.execCommand("insertText", false, last);
-        } else {
-          setField(field, before);
-        }
-      } catch (_) {
-        setField(field, before);
-      }
-    }
+    if (options.nudge) nudgeField(field);
     return true;
+  }
+
+  async function clearField(field) {
+    try { field.focus(); } catch (_) {}
+    for (let attempt = 0; attempt < 8 && String(field.value || ""); attempt++) {
+      try { field.setSelectionRange(0, field.value.length); } catch (_) {}
+      let deleted = false;
+      try { deleted = document.execCommand("delete"); } catch (_) { deleted = false; }
+      if (!deleted) break;
+      await wait(30);
+    }
+    if (String(field.value || "")) forceValue(field, "");
+  }
+
+  // Delete the current value and retype it through real edits so the widget's
+  // own change handler runs (native value setters are ignored by some widgets).
+  async function retypeField(field, text) {
+    const target = String(text);
+    await clearField(field);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { field.focus(); field.setSelectionRange(0, field.value.length); } catch (_) {}
+      let inserted = false;
+      try { inserted = document.execCommand("insertText", false, target); } catch (_) { inserted = false; }
+      if (inserted && String(field.value) === target) return;
+      await wait(40);
+    }
+    forceValue(field, target);
+  }
+
+  // Some masks only commit when characters arrive one at a time.
+  async function typeFieldCharByChar(field, text) {
+    await clearField(field);
+    let ok = false;
+    try {
+      for (const char of String(text)) {
+        if (!document.execCommand("insertText", false, char)) { ok = false; break; }
+        ok = true;
+        await wait(30);
+      }
+    } catch (_) { ok = false; }
+    if (!ok || String(field.value) !== String(text)) forceValue(field, text);
+  }
+
+  // Heuristic: does the widget currently show a validation error for this field?
+  function priceErrorShown(field) {
+    if (!field) return false;
+    if (field.getAttribute("aria-invalid") === "true") return true;
+    const scope = field.closest("div, section, form") || field.parentElement;
+    if (!scope) return false;
+    const nodes = scope.querySelectorAll("[role='alert'], [class*='error' i], [class*='invalid' i], [class*='danger' i], [data-testid*='error' i]");
+    for (const node of nodes) {
+      if (node.closest(".revint-panel")) continue;
+      if (clean(node.textContent)) return true;
+    }
+    return false;
   }
 
   function isInteractable(element) {
@@ -1925,13 +2041,6 @@
     return [...new Set(String(value || "").split(/[,;\/]/).map((part) => part.trim()).filter(Boolean))];
   }
 
-  // Every language ReVint supports that uses a comma decimal separator.
-  // English (vinted.com / .co.uk / .ie) is the only dot-decimal market.
-  const COMMA_DECIMAL_LOCALES = new Set([
-    "de", "fr", "nl", "es", "it", "pt", "pl", "lt", "lv", "et", "cs", "sk",
-    "hu", "ro", "sv", "da", "fi", "el", "hr", "bg", "sl"
-  ]);
-
   function formatPrice(value) {
     let raw = String(value == null ? "" : value).replace(/[^\d.,]/g, "");
     if (!raw) return "";
@@ -1958,27 +2067,6 @@
     return labeled || fieldBy(["0,00"]) || fieldBy(["0.00"]) || null;
   }
 
-  function localeUsesComma(locale) {
-    const code = String(locale || "").toLowerCase().split(/[-_]/)[0];
-    return COMMA_DECIMAL_LOCALES.has(code);
-  }
-
-  function priceSeparator(field) {
-    if (field?.type === "number") return ".";
-    // 1. The field itself (placeholder / aria-label) knows best.
-    const hint = `${field?.placeholder || ""} ${field?.getAttribute?.("aria-label") || ""}`;
-    if (hint.includes(",")) return ",";
-    if (hint.includes(".")) return ".";
-    // 2. The rendered page language.
-    const pageLang = document.documentElement?.lang;
-    if (localeUsesComma(pageLang)) return ",";
-    if (pageLang) return ".";
-    // 3. The user's browser language.
-    if (navigator.language) return localeUsesComma(navigator.language) ? "," : ".";
-    // 4. The marketplace the extension detected.
-    return localeUsesComma(detectedLanguage) ? "," : ".";
-  }
-
   async function setTextWhenReady(hints, value, timeout = 5000) {
     if (!value) return false;
     const deadline = Date.now() + timeout;
@@ -1989,6 +2077,8 @@
     }
     return false;
   }
+
+
 
   async function setPrice(value) {
     const price = formatPrice(value);
@@ -2006,31 +2096,44 @@
       return false;
     }
     const numeric = Number(price);
-    const fixed = Number.isFinite(numeric) ? numeric.toFixed(2) : price;
-    // Vinted's price input parses the raw value with dot semantics and only
-    // converts a comma typed via the keyboard, so a programmatic comma makes
-    // its preview show "NaN €". Write the canonical dot value first and only
-    // try the locale separator if the field rejects it.
-    const candidates = Number.isFinite(numeric)
-      ? [...new Set([String(numeric), fixed, fixed.replace(".", priceSeparator(field))])]
-      : [price];
-    const normalize = (input) => {
+    if (!Number.isFinite(numeric)) {
+      console.warn(`[ReVint] ${t("logPriceFail")}`, { value, reason: "not a number" });
+      return false;
+    }
+    // Vinted parses the raw input with Number(), so a comma yields NaN and its
+    // own preview renders "NaN €". Only ever write the dot form ("3", "12.5");
+    // never the locale separator.
+    const canonical = String(numeric);
+    const parse = (input) => {
       const text = String(input == null ? "" : input).replace(/[^\d.,-]/g, "").replace(",", ".");
+      if (!text) return NaN;
       const number = Number(text);
-      return Number.isFinite(number) ? String(number) : text;
+      return Number.isFinite(number) ? number : NaN;
     };
-    if (normalize(field.value) === normalize(price)) return true;
-    for (const candidate of candidates) {
-      typeIntoField(field, candidate);
-      await wait(300);
-      if (normalize(field.value) === normalize(price)) return true;
-      // Some masks only commit on blur/change.
-      try { field.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
-      await wait(150);
-      if (normalize(field.value) === normalize(price)) return true;
+    const isBad = (input) => /nan/i.test(String(input == null ? "" : input));
+    const good = () => !isBad(field.value) && parse(field.value) === numeric;
+
+    // Vinted's price widget keeps its own state; a plain programmatic value can
+    // leave validation complaining even though the text is visible. Always go
+    // through a real clear + retype (what works by hand), then re-check the
+    // widget's own error state.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await retypeField(field, canonical);
+      await wait(220);
+      try { field.blur?.(); } catch (_) {}
+      await wait(160);
+      if (good() && !priceErrorShown(field)) return true;
+      if (attempt === 0) {
+        await typeFieldCharByChar(field, canonical);
+        try { field.blur?.(); } catch (_) {}
+        await wait(220);
+        if (good() && !priceErrorShown(field)) return true;
+      }
       field = priceField() || field;
     }
-    console.warn(`[ReVint] ${t("logPriceFail")}`, { value, candidates, current: field?.value });
+    console.warn(`[ReVint] ${t("logPriceFail")}`, {
+      value, numeric: canonical, current: field?.value, errorShown: priceErrorShown(field)
+    });
     return false;
   }
 
@@ -2053,6 +2156,9 @@
     if (bundle?.format !== FORMAT || bundle?.version !== VERSION || !bundle.item) throw new Error(t("errInvalidFile"));
     const item = bundle.item;
     console.info(`[ReVint] ${t("logImportData")}`, item);
+    // Let the page patch the values its widgets refuse to submit.
+    setUploadPatch(item);
+    await installUploadPatch();
     const total =
       3 +
       1 +

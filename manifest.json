@@ -6,7 +6,8 @@
   "homepage_url": "https://github.com/mxKeaton/ReVint",
   "minimum_chrome_version": "102",
   "permissions": [
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "*://*.vinted.net/*",

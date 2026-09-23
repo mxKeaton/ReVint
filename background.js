@@ -254,6 +254,86 @@ const handlers = {
     return { filename: name };
   },
 
+  // Vinted's custom widgets ignore synthetic events for their submitted form
+  // model, so fields like price/brand/colour/isbn reach the server empty. Let
+  // the UI fill what it accepts and patch the outgoing upload request in the
+  // page, injecting only the values it dropped just before it is sent.
+  "install-upload-patch": async ({ values }, sender) => {
+    const tabId = sender?.tab?.id;
+    if (tabId == null) return { ok: false, error: "no-tab" };
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      args: [values || {}],
+      func: (patch) => {
+        window.__revintPatch = patch || {};
+        if (window.__revintPatchInstalled) return { installed: true, updated: true };
+        window.__revintPatchInstalled = true;
+
+        const applyPatch = (payload) => {
+          const valuesNow = window.__revintPatch;
+          if (!valuesNow || !payload || typeof payload !== "object") return false;
+          const item = payload.item && typeof payload.item === "object" ? payload.item : payload;
+          if (!item || typeof item !== "object") return false;
+          if (!("price" in item) && !("brand_id" in item) && !("assigned_photos" in item)) return false;
+          let changed = false;
+          if (valuesNow.price != null && (item.price == null || item.price === "" || item.price === 0)) {
+            item.price = valuesNow.price;
+            changed = true;
+          }
+          if (valuesNow.brandId != null && item.brand_id == null) {
+            item.brand_id = valuesNow.brandId;
+            changed = true;
+          }
+          if (Array.isArray(valuesNow.colorIds) && valuesNow.colorIds.length && (!item.color_ids || !item.color_ids.length)) {
+            item.color_ids = valuesNow.colorIds;
+            changed = true;
+          }
+          if (valuesNow.isbn && !item.isbn) {
+            item.isbn = valuesNow.isbn;
+            changed = true;
+          }
+          return changed;
+        };
+
+        const looksLikeUpload = (url, body) =>
+          /item_upload|upload_session|assigned_photos/i.test(`${url} ${body || ""}`);
+
+        const originalFetch = window.fetch;
+        window.fetch = function (input, init) {
+          try {
+            const url = typeof input === "string" ? input : (input && input.url) || "";
+            const method = (init && init.method) || (input && input.method) || "GET";
+            if (/POST/i.test(method) && init && typeof init.body === "string" && looksLikeUpload(url, init.body)) {
+              const json = JSON.parse(init.body);
+              if (applyPatch(json)) init = { ...init, body: JSON.stringify(json) };
+            }
+          } catch (_) {}
+          return arguments.length > 1 ? originalFetch.call(this, input, init) : originalFetch.call(this, input);
+        };
+
+        const originalOpen = XMLHttpRequest.prototype.open;
+        const originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function (method, url) {
+          this.__revintMethod = method;
+          this.__revintUrl = url;
+          return originalOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function (body) {
+          try {
+            if (/POST/i.test(this.__revintMethod || "") && typeof body === "string" && looksLikeUpload(this.__revintUrl, body)) {
+              const json = JSON.parse(body);
+              if (applyPatch(json)) body = JSON.stringify(json);
+            }
+          } catch (_) {}
+          return originalSend.call(this, body);
+        };
+        return { installed: true };
+      }
+    });
+    return { result: results?.[0]?.result ?? null };
+  },
+
   "delete-files": async ({ names }) => {
     const deleted = [];
     const failed = [];
@@ -271,10 +351,10 @@ const handlers = {
   }
 };
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return;
-  Promise.resolve(handler(message))
+  Promise.resolve(handler(message, sender))
     .then((result) => sendResponse({ ok: true, ...result }))
     .catch((error) => sendResponse({ ok: false, error: error.message }));
   return true;
