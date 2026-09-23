@@ -1397,14 +1397,34 @@
 
   // Masked / controlled inputs (like Vinted's price field) sometimes ignore a
   // programmatic value but accept real text insertion, so simulate typing.
-  function typeIntoField(field, value) {
+  function typeIntoField(field, value, options = {}) {
     if (!field || value === undefined || value === null || value === "") return false;
     const text = String(value);
+    const read = () => String(field.value == null ? "" : field.value);
     try { field.focus(); } catch (_) {}
     try { field.setSelectionRange(0, field.value.length); } catch (_) {}
     let inserted = false;
     try { inserted = document.execCommand("insertText", false, text); } catch (_) { inserted = false; }
-    if (!inserted) setField(field, text);
+    if (!inserted || !read()) setField(field, text);
+    // React controlled inputs can keep the DOM value while their internal state
+    // stays empty (the field then validates as missing, even though the text is
+    // visible). Re-type the last character through real input events to force a
+    // change the framework registers — the same fix as deleting and retyping.
+    // Only for plain text fields: masked inputs could reformat mid-nudge.
+    const before = options.nudge ? read() : "";
+    if (before) {
+      const last = before.slice(-1);
+      try {
+        field.setSelectionRange(before.length - 1, before.length);
+        if (document.execCommand("delete")) {
+          document.execCommand("insertText", false, last);
+        } else {
+          setField(field, before);
+        }
+      } catch (_) {
+        setField(field, before);
+      }
+    }
     return true;
   }
 
@@ -1964,7 +1984,7 @@
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
       const field = fieldBy(hints);
-      if (field) return setField(field, value);
+      if (field) return typeIntoField(field, value, { nudge: true });
       await wait(200);
     }
     return false;
