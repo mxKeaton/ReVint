@@ -761,6 +761,7 @@
       '</div>',
       '<div class="revint-import-view" hidden>',
       '<div class="revint-progress revint-progress--import"><div class="revint-progress-bar"></div></div>',
+      `<div class="revint-busy-note revint-import-note">${t("busy")}</div>`,
       '</div>'
     ].join("");
 

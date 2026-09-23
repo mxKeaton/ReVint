@@ -145,6 +145,8 @@
 .revint-home-button:hover { color: #005b63; }
 
 .revint-import-view { display: none; }
+.revint-panel.revint-importing { min-width: 210px; }
+.revint-import-note { text-align: center; }
 .revint-panel.revint-importing .revint-body { display: none; }
 .revint-panel.revint-importing .revint-panel-head { justify-content: center; }
 .revint-panel.revint-importing .revint-panel-title { text-align: center; width: 100%; }
