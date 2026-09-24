@@ -10,7 +10,7 @@ ReVint is a browser extension that helps you back up and re-create **your own** 
 
 ## What ReVint accesses
 
-- **Your own Vinted pages** (`/member*` and `/items/new*`) on Vinted domains. When you click "Als Relisting speichern", ReVint reads the listing page you are already viewing — including the title, description, price, category, size, condition, brand, colour, material, ISBN, platform, age rating and the photo URLs.
+- **Your own Vinted pages** (`/member*` and `/items/new*`) on Vinted domains. When you click "Save as relisting", ReVint reads the listing page you are already viewing — including the title, description, price, category, size, condition, brand, colour, material, ISBN, platform, age rating and the photo URLs.
 - **The photos** of your listing, downloaded from Vinted's image servers so they can be stored with the saved listing.
 - **The sell form** (`/items/new*`), where ReVint fills in the fields for you when you re-list a saved item.
 
@@ -31,7 +31,7 @@ Nothing. ReVint has no network endpoints of its own and transmits no data to the
 
 ## Data retention and deletion
 
-- You can delete saved listings at any time in the ReVint panel ("Auswahl löschen").
+- You can delete saved listings at any time in the ReVint panel ("Delete").
 - Uninstalling the extension removes all locally stored data.
 
 ## Permissions

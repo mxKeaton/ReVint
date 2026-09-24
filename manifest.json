@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ReVint",
   "version": "1.0.0",
-  "description": "Sichert eigene Vinted-Relistings lokal in der Erweiterung und füllt das Formular zum erneuten Einstellen aus.",
+  "description": "Save your own Vinted listings locally and refill the sell form to relist them in one click.",
   "homepage_url": "https://github.com/mxKeaton/ReVint",
   "minimum_chrome_version": "102",
   "permissions": [

@@ -11,11 +11,11 @@ Without a Vinted account these pages are not reachable, so the extension appears
 
 ## How to test
 1. Load the unpacked extension and log in to any Vinted domain (e.g. https://www.vinted.de).
-2. Open **My items** (`/member/...`). A "ReVint" panel appears in the top right. Below each "Push/Pushen" button there is an "Als Relisting speichern" button.
+2. Open **My items** (`/member/...`). A "ReVint" panel appears in the top right. Below each item there is a "Save as relisting" button.
 3. Click it on one of your own listings: the extension reads that page and stores the listing locally inside the extension (no download, no server).
 4. Open the sell page `https://www.vinted.de/items/new`. The saved relisting is listed in the ReVint panel. Click it: the form fields are filled automatically (title, description, price, category, condition, size, brand, colour, material, photos, …). Nothing is submitted until the user clicks a button; the user reviews the form first.
 5. Optional: after reviewing, click **"Upload & delete"**. ReVint publishes the new listing and then deletes the original listing that was saved, using Vinted's own API. This only runs for the single original item the user saved, and only after the new listing is published.
-6. Optional: select several relistings and use "Auswahl relisten" to open them one by one.
+6. Optional: select several relistings and use "Relist" to open them one by one.
 
 ## Permissions justification
 - `storage`: remembers your saved relistings and the queue used to open several items in sequence.
